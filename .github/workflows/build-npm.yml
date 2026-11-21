@@ -80,6 +80,11 @@ jobs:
         run: |
           npx napi create-npm-dirs
           npx napi artifacts --output-dir artifacts
+      # The main package's optionalDependencies (one per platform package)
+      # are added here, at release time, as napi's prepublish does: they
+      # cannot be in the committed package.json (npm ci would need them in
+      # the lock before they exist on npm). native.js's expected platform
+      # package version is set too.
       - name: Versions and packs
         env:
           VERSION: ${{ inputs.version }}
@@ -89,6 +94,20 @@ jobs:
           for dir in npm/*/; do
             (cd "$dir" && npm version "$VERSION" --no-git-tag-version --allow-same-version && npm pack --pack-destination ../../packages)
           done
+          node -e '
+            const fs = require("fs");
+            const pkg = JSON.parse(fs.readFileSync("package.json", "utf8"));
+            pkg.optionalDependencies = {};
+            for (const dir of fs.readdirSync("npm")) {
+              const sub = JSON.parse(fs.readFileSync(`npm/${dir}/package.json`, "utf8"));
+              pkg.optionalDependencies[sub.name] = process.env.VERSION;
+            }
+            fs.writeFileSync("package.json", JSON.stringify(pkg, null, 2) + "\n");
+            const js = fs.readFileSync("native.js", "utf8")
+              .replace(/bindingPackageVersion !== '\''[^'\'']*'\''/g, `bindingPackageVersion !== '\''${process.env.VERSION}'\''`)
+              .replace(/expected [^ ]+ but got/g, `expected ${process.env.VERSION} but got`);
+            fs.writeFileSync("native.js", js);
+          '
           npm pack --pack-destination packages
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
