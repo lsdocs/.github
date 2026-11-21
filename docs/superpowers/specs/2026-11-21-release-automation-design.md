@@ -58,6 +58,11 @@ rest.
   repository's workflow file (PyPI does not accept a reusable workflow as
   the publisher).
 - maturin builds Linux wheels with `--zig`, except on ppc64le.
+- Other release builds for Linux targets (the `lsdocs` binaries and the
+  napi addons) use cross (cross-rs), for older-glibc compatibility. cross
+  is installed as a tool (mise or cargo-binstall), not through a
+  third-party action.
+- No WebAssembly build of the Node.js bindings (for now).
 - Who may publish: `publish = false` stays only on the binding crates and
   dev tooling; every other crate drops it. Crate names were checked on
   crates.io (none taken).
@@ -100,8 +105,12 @@ Each crate has its own version (the maintainer's "the binding crates that
 have their own versions"): every crate manifest replaces
 `version.workspace = true` with its own `version = "0.1.0"`, and
 `[workspace.package]` drops `version`. release-plz then bumps only the
-crates that changed (and, as it does, dependents within the repository
-whose dependency requirement it updates).
+crates that changed. A binding crate is bumped whenever the crate it
+wraps is bumped (maintainer's decision): `lsdocs-plugin-python` and
+`lsdocs-plugin-node` with `lsdocs-plugin-sdk`, `lsdocs-rst-python` and
+`lsdocs-rst-node` with `lsdocs-rst`. If release-plz does not bump them on
+its own (they depend on the wrapped crate by path), its configuration or
+the binding crates' dependency requirements must make it.
 
 ### Dependencies between repositories
 
@@ -170,7 +179,7 @@ All `workflow_call`, `permissions: {}` with `contents: read` per job, using
 
 - `build-bin.yml`, inputs `package` and `targets` (JSON list of
   `{target, os}`). Builds `cargo build --release --locked -p <package>
-  --target <target>`, then archives the binary with `LICENSE-APACHE` and
+  --target <target>` (`cross build` for Linux targets), then archives the binary with `LICENSE-APACHE` and
   `LICENSE-MIT`: `<package>-<target>.zip` on Windows,
   `<package>-<target>.tar.gz` elsewhere.
 - `build-wheels.yml`, inputs `working-directory` (the Python package) and
@@ -178,10 +187,15 @@ All `workflow_call`, `permissions: {}` with `contents: read` per job, using
   ppc64le) and an sdist. The version comes from `Cargo.toml` (the Python
   package's `pyproject.toml` declares `dynamic = ["version"]`).
 - `build-npm.yml`, inputs `working-directory` (the Node package) and
-  `targets`. Builds the napi addon per target, sets the version from the
-  binding crate's `Cargo.toml` with `npm version <v> --no-git-tag-version`,
-  and packs (`npm pack`). How napi's per-platform packages are laid out is
-  left to the builder (napi's own CLI conventions).
+  `targets`. Uses napi-rs' usual layout (maintainer's decision): the main
+  package (`@lsdocs/plugin`, `@lsdocs/rst`) plus one package per platform
+  (for example `@lsdocs/plugin-win32-x64-msvc`) under `npm/`, which the
+  main package lists as `optionalDependencies` (napi's `create-npm-dirs`
+  and `prepublish` conventions). Builds the addon per target (cross for
+  Linux targets), sets every package's version from the binding crate's
+  `Cargo.toml` (`npm version <v> --no-git-tag-version`), and packs each
+  package (`npm pack`). The publishing job publishes the platform packages
+  first, then the main package.
 
 ### cargo-binstall
 
@@ -213,8 +227,11 @@ The Renovate GitHub App is installed on the organization by the maintainer.
   apidoc, apidoc-clang, apidoc-python, apidoc-rust, apidoc-typescript,
   lsdocs.
 - Trusted publishers: crates.io for every published crate (repository,
-  `release.yml`, environment `release`); PyPI and npm for the four binding
-  packages (`tag.yml`, environment `release`).
+  `release.yml`, environment `release`); PyPI for `lsdocs-plugin` and
+  `lsdocs-rst`; npm for `@lsdocs/plugin`, `@lsdocs/rst` and each of their
+  per-platform packages (`tag.yml`, environment `release`). The maintainer
+  owns the `@lsdocs` npm scope; the PyPI names and the npm package names
+  are free (checked 2026-11-21).
 - The Renovate app on the organization.
 
 ### First release (bootstrap)
@@ -235,5 +252,5 @@ then releases.
 - Whether release-plz reads its config from `.config/`.
 - Whether GitHub release download URLs work with `/` in the tag name, and
   the binstall `pkg-url` that matches.
-- napi's per-platform package layout and how `build-npm.yml` packs it.
+- napi's flag for building with cross (and that it works for each target).
 - The default `targets` lists.
