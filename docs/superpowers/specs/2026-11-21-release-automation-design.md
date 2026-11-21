@@ -186,7 +186,7 @@ The Renovate GitHub App is installed on the organization by the maintainer.
 - A GitHub App for releases (`contents: write`, `pull-requests: write`),
   installed on the releasing repositories; its ID and private key as
   organization secrets.
-- A `release` environment in the 17 releasing repositories: doctree,
+- A `release` environment in the 18 releasing repositories: doctree,
   protocol, plugin-sdk, rst, markdown, render-html, extras, sphinx-addons,
   transform-highlight, transform-links, transform-nav, transform-toc,
   apidoc, apidoc-clang, apidoc-python, apidoc-rust, apidoc-typescript,
