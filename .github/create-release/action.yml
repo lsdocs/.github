@@ -1,0 +1,45 @@
+name: Create Release
+description: >-
+  Creates the GitHub release for a `<crate>/v<version>` tag with `gh`, its
+  notes the crate's CHANGELOG.md section for that version. Runs in the
+  releasing repository's own job (which needs `contents: write`).
+
+inputs:
+  latest:
+    description: Mark the release as the repository's latest ("true" or "false").
+    required: false
+    default: "false"
+  token:
+    description: Token for gh (needs contents write).
+    required: false
+    default: ${{ github.token }}
+
+runs:
+  using: "composite"
+  steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        persist-credentials: false
+    - name: Create the release
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.token }}
+        TAG: ${{ github.ref_name }}
+        LATEST: ${{ inputs.latest }}
+      run: |
+        crate="${TAG%/v*}"
+        version="${TAG##*/v}"
+        # The crate's directory: the Cargo.toml whose package is `crate`.
+        manifest=$(grep -rlx --include=Cargo.toml "name = \"$crate\"" . | head -n 1)
+        changelog="$(dirname "$manifest")/CHANGELOG.md"
+        # The section under "## [<version>]" (release-plz's heading), up to
+        # the next "## [".
+        if [ -f "$changelog" ]; then
+          awk -v v="$version" '
+            index($0, "## [" v "]") == 1 { found = 1; next }
+            found && index($0, "## [") == 1 { exit }
+            found { print }
+          ' "$changelog" > notes.md
+        fi
+        [ -s notes.md ] || echo "Release $TAG." > notes.md
+        gh release create "$TAG" --title "$TAG" --notes-file notes.md --verify-tag "--latest=$LATEST"
