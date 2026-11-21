@@ -1,0 +1,23 @@
+# cargo-deny (`nur deny` installs it through mise, MISE_ENV=deny).
+# Called from a repository's CI:
+#   uses: lsdocs/.github/.github/workflows/deny.yml@<ref>
+name: deny
+
+on:
+  workflow_call:
+
+permissions: {}
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  deny:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: lsdocs/.github/.github/setup-repo@main
+        with:
+          mise-install-args: cargo:nur
+      - run: nur deny

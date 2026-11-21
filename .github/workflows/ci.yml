@@ -1,0 +1,43 @@
+# `nur ci` on each OS. Called from a repository's CI:
+#   uses: lsdocs/.github/.github/workflows/ci.yml@<ref>
+name: ci
+
+on:
+  workflow_call:
+    inputs:
+      os:
+        description: Runners to run on, as a JSON list.
+        type: string
+        default: '["ubuntu-latest", "windows-latest", "macos-latest"]'
+      apt-packages:
+        description: >-
+          Packages to install with apt on Linux before setup, separated by
+          spaces (for example `libclang-dev`).
+        type: string
+        default: ""
+
+permissions: {}
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  ci:
+    name: ci (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: ${{ fromJSON(inputs.os) }}
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+    steps:
+      - name: Install apt packages
+        if: runner.os == 'Linux' && inputs.apt-packages != ''
+        shell: bash
+        env:
+          APT_PACKAGES: ${{ inputs.apt-packages }}
+        # Word splitting on purpose: one argument per package.
+        run: sudo apt-get update && sudo apt-get install -y $APT_PACKAGES
+      - uses: lsdocs/.github/.github/setup-repo@main
+      - run: nur ci
