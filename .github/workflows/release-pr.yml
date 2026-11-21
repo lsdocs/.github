@@ -40,8 +40,11 @@ jobs:
           persist-credentials: false
       - name: Install Rust toolchain from rust-toolchain.toml
         run: rustup show active-toolchain
+      # release-plz/action reads the GitHub token from GITHUB_TOKEN (its
+      # `token` input is the cargo registry token).
       - uses: release-plz/action@66b324fd6c72d05d2a08568492ecdd62bfb8a62b # v0.5.148
         with:
           command: release-pr
           config: .config/release-plz.toml
-          token: ${{ steps.app-token.outputs.token }}
+        env:
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
