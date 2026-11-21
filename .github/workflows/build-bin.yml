@@ -14,7 +14,11 @@ on:
       targets:
         description: Target triples, as a JSON list.
         type: string
-        default: '["x86_64-pc-windows-msvc", "aarch64-pc-windows-msvc", "x86_64-apple-darwin", "aarch64-apple-darwin", "x86_64-unknown-linux-gnu", "aarch64-unknown-linux-gnu", "x86_64-unknown-linux-musl"]'
+        default: >-
+          ["x86_64-pc-windows-msvc", "aarch64-pc-windows-msvc",
+          "x86_64-apple-darwin", "aarch64-apple-darwin",
+          "x86_64-unknown-linux-gnu", "aarch64-unknown-linux-gnu",
+          "x86_64-unknown-linux-musl"]
 
 permissions: {}
 
@@ -28,7 +32,10 @@ jobs:
       fail-fast: false
       matrix:
         target: ${{ fromJSON(inputs.targets) }}
-    runs-on: ${{ contains(matrix.target, 'windows') && 'windows-latest' || contains(matrix.target, 'apple') && 'macos-latest' || 'ubuntu-latest' }}
+    runs-on: >-
+      ${{ contains(matrix.target, 'windows') && 'windows-latest'
+      || contains(matrix.target, 'apple') && 'macos-latest'
+      || 'ubuntu-latest' }}
     permissions:
       contents: read
     steps:
@@ -42,7 +49,10 @@ jobs:
         env:
           PACKAGE: ${{ inputs.package }}
           TARGET: ${{ matrix.target }}
-        run: mise exec cargo:cross@0.2.5 -- cross build --release --locked -p "$PACKAGE" --target "$TARGET"
+        run: >-
+          mise exec cargo:cross@latest --
+          cross build --release --locked
+          -p "$PACKAGE" --target "$TARGET"
       - name: Build (cargo)
         if: ${{ !contains(matrix.target, 'linux') }}
         shell: bash
