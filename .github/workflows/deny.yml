@@ -17,7 +17,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: lsdocs/.github/.github/setup-repo@setup-reusable-ci
+      - uses: lsdocs/.github/.github/setup-repo@main
         with:
           mise-install-args: cargo:nur
       - run: nur deny

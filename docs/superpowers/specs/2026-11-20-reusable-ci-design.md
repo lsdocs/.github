@@ -135,11 +135,12 @@ jobs:
 - lsdocs keeps its own `core` job, using `setup-repo` directly.
 - While the workflows are on the `setup-reusable-ci` branch, callers use
   that ref (as lsdocs does now); they switch to `@main` once it merges.
-- Merging `setup-reusable-ci`, in this order: first the workflows' own
-  `setup-repo@setup-reusable-ci` references (`ci.yml`, `msrv.yml`,
-  `deny.yml`) and lsdocs' `core` job move to `@main`; then the callers
-  switch to `@main`; only then is the branch deleted. Deleting it earlier
-  breaks every repository's CI at once.
+- Merging `setup-reusable-ci`, in this order: the workflows' own
+  `setup-repo` references (`ci.yml`, `msrv.yml`, `deny.yml`) point at
+  `@main` before it merges (callers' CI fails from then until the merge;
+  re-run it after); then each caller, and lsdocs' `core` job, switches to
+  `@main`; only then is the branch deleted. Deleting it earlier breaks
+  every repository's CI at once.
 
 ## Where the work lands
 
