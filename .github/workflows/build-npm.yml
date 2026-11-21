@@ -1,0 +1,97 @@
+# Builds a napi-rs package: the addon per target (cross on Linux), then the
+# main package and one package per platform (napi's usual layout, npm/), all
+# at `version`, packed with npm pack. Uploads `npm-packages` (the .tgz
+# files). Publishes nothing.
+#   uses: lsdocs/.github/.github/workflows/build-npm.yml@<ref>
+name: build-npm
+
+on:
+  workflow_call:
+    inputs:
+      working-directory:
+        description: The Node.js package's directory (its package.json).
+        type: string
+        required: true
+      version:
+        description: The version every package gets (the binding crate's).
+        type: string
+        required: true
+      targets:
+        description: Target triples, as a JSON list (napi's targets).
+        type: string
+        default: '["x86_64-pc-windows-msvc", "aarch64-pc-windows-msvc", "x86_64-apple-darwin", "aarch64-apple-darwin", "x86_64-unknown-linux-gnu", "aarch64-unknown-linux-gnu", "x86_64-unknown-linux-musl"]'
+
+permissions: {}
+
+jobs:
+  addon:
+    name: addon (${{ matrix.target }})
+    strategy:
+      fail-fast: false
+      matrix:
+        target: ${{ fromJSON(inputs.targets) }}
+    runs-on: ${{ contains(matrix.target, 'windows') && 'windows-latest' || contains(matrix.target, 'apple') && 'macos-latest' || 'ubuntu-latest' }}
+    permissions:
+      contents: read
+    defaults:
+      run:
+        shell: bash
+        working-directory: ${{ inputs.working-directory }}
+    steps:
+      - uses: lsdocs/.github/.github/setup-repo@main
+      - run: npm ci
+      # Linux: cross (cross-rs), for older-glibc compatibility.
+      - name: Build (cross)
+        if: contains(matrix.target, 'linux')
+        env:
+          TARGET: ${{ matrix.target }}
+        run: mise exec cargo:cross@0.2.5 -- npx napi build --release --platform --use-cross --target "$TARGET" --output-dir addon
+      - name: Build (cargo)
+        if: ${{ !contains(matrix.target, 'linux') }}
+        env:
+          TARGET: ${{ matrix.target }}
+        run: |
+          rustup target add "$TARGET"
+          npx napi build --release --platform --target "$TARGET" --output-dir addon
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: napi-${{ matrix.target }}
+          path: ${{ inputs.working-directory }}/addon/*.node
+          if-no-files-found: error
+
+  pack:
+    needs: addon
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    defaults:
+      run:
+        shell: bash
+        working-directory: ${{ inputs.working-directory }}
+    steps:
+      - uses: lsdocs/.github/.github/setup-repo@main
+      - run: npm ci
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: napi-*
+          path: ${{ inputs.working-directory }}/artifacts
+          merge-multiple: true
+      - name: Per-platform packages
+        run: |
+          npx napi create-npm-dirs
+          npx napi artifacts --output-dir artifacts
+      - name: Versions and packs
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          mkdir -p packages
+          npm version "$VERSION" --no-git-tag-version --allow-same-version
+          for dir in npm/*/; do
+            (cd "$dir" && npm version "$VERSION" --no-git-tag-version --allow-same-version && npm pack --pack-destination ../../packages)
+          done
+          npm pack --pack-destination packages
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: npm-packages
+          path: ${{ inputs.working-directory }}/packages/*.tgz
+          if-no-files-found: error

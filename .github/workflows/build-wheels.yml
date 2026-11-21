@@ -1,0 +1,69 @@
+# Builds a Python package's wheels (maturin; --zig on Linux except ppc64le)
+# and its sdist. Uploads `wheels-<target>` and `sdist`. Publishes nothing.
+#   uses: lsdocs/.github/.github/workflows/build-wheels.yml@<ref>
+name: build-wheels
+
+on:
+  workflow_call:
+    inputs:
+      working-directory:
+        description: The Python package's directory (its pyproject.toml).
+        type: string
+        required: true
+      targets:
+        description: Target triples, as a JSON list.
+        type: string
+        default: '["x86_64-pc-windows-msvc", "aarch64-pc-windows-msvc", "x86_64-apple-darwin", "aarch64-apple-darwin", "x86_64-unknown-linux-gnu", "aarch64-unknown-linux-gnu", "x86_64-unknown-linux-musl"]'
+
+permissions: {}
+
+jobs:
+  wheels:
+    name: wheels (${{ matrix.target }})
+    strategy:
+      fail-fast: false
+      matrix:
+        target: ${{ fromJSON(inputs.targets) }}
+    runs-on: ${{ contains(matrix.target, 'windows') && 'windows-latest' || contains(matrix.target, 'apple') && 'macos-latest' || 'ubuntu-latest' }}
+    permissions:
+      contents: read
+    steps:
+      - uses: lsdocs/.github/.github/setup-repo@main
+        with:
+          mise-install-args: cargo:nur
+      # On Linux, zig cross-compiles on the host (manylinux/musllinux tags
+      # without a container), except ppc64le, which builds in maturin's
+      # manylinux container.
+      - uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
+        with:
+          working-directory: ${{ inputs.working-directory }}
+          target: ${{ matrix.target }}
+          manylinux: ${{ contains(matrix.target, 'musl') && 'musllinux_1_2' || 'auto' }}
+          container: ${{ contains(matrix.target, 'linux') && !startsWith(matrix.target, 'powerpc64le') && 'off' || '' }}
+          args: >-
+            --release --locked --out dist
+            ${{ contains(matrix.target, 'linux') && !startsWith(matrix.target, 'powerpc64le') && '--zig' || '' }}
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: wheels-${{ matrix.target }}
+          path: ${{ inputs.working-directory }}/dist/*.whl
+          if-no-files-found: error
+
+  sdist:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: lsdocs/.github/.github/setup-repo@main
+        with:
+          mise-install-args: cargo:nur
+      - uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
+        with:
+          working-directory: ${{ inputs.working-directory }}
+          command: sdist
+          args: --out dist
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: sdist
+          path: ${{ inputs.working-directory }}/dist/*.tar.gz
+          if-no-files-found: error

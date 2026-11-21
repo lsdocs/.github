@@ -1,0 +1,47 @@
+# Opens or updates the release PR (release-plz release-pr): version bumps
+# and changelogs from Conventional Commits. Publishes nothing. Called from a
+# repository's release workflow on pushes to main:
+#   uses: lsdocs/.github/.github/workflows/release-pr.yml@<ref>
+name: release-pr
+
+on:
+  workflow_call:
+    secrets:
+      app-id:
+        description: The release GitHub App's ID.
+        required: true
+      app-private-key:
+        description: The release GitHub App's private key.
+        required: true
+
+permissions: {}
+
+jobs:
+  release-pr:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    concurrency:
+      group: release-pr-${{ github.repository }}
+      cancel-in-progress: false
+    steps:
+      # The App's token (not GITHUB_TOKEN), so CI runs on the release PR.
+      - uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc # v3.4.0
+        id: app-token
+        with:
+          app-id: ${{ secrets.app-id }}
+          private-key: ${{ secrets.app-private-key }}
+          # Only what release-plz needs for the release PR.
+          permission-contents: write
+          permission-pull-requests: write
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Install Rust toolchain from rust-toolchain.toml
+        run: rustup show active-toolchain
+      - uses: release-plz/action@66b324fd6c72d05d2a08568492ecdd62bfb8a62b # v0.5.148
+        with:
+          command: release-pr
+          config: .config/release-plz.toml
+          token: ${{ steps.app-token.outputs.token }}
