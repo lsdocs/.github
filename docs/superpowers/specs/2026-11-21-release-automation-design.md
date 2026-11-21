@@ -94,6 +94,15 @@ rest.
 binding crates use it (Claude's call). bench and lsdocs.github.io have no
 crates and get no release workflow.
 
+### Versions
+
+Each crate has its own version (the maintainer's "the binding crates that
+have their own versions"): every crate manifest replaces
+`version.workspace = true` with its own `version = "0.1.0"`, and
+`[workspace.package]` drops `version`. release-plz then bumps only the
+crates that changed (and, as it does, dependents within the repository
+whose dependency requirement it updates).
+
 ### Dependencies between repositories
 
 Every `lsdocs-*` dependency changes from `{ git = ..., branch = "main",
@@ -112,6 +121,11 @@ there):
   (`CHANGELOG.md` beside each crate).
 - `git_release_enable = false`: releases are created with `gh` by the tag
   workflow (below).
+- `release_always = false`: `release-plz release` publishes and tags only
+  when the pushed commit is a merged release PR, so merging the release PR
+  is the one authorization; the `release` environment needs no required
+  reviewer (Claude's call). The first release goes the same way: the first
+  release PR proposes the crates at 0.1.0 with their changelogs.
 - The binding crates: released (bumped, changelog, tagged) but not
   published to crates.io.
 
@@ -134,7 +148,14 @@ Tags pushed with the App token trigger workflows (tags pushed with
 `.github/workflows/tag.yml`, on `push: tags: ["*/v*"]`:
 
 - Creates the GitHub release for the tag with `gh release create`, notes
-  from the crate's changelog section.
+  from the crate's changelog section, `--latest=false` except for
+  `lsdocs/v*` in the lsdocs repository (so "latest" there is the CLI;
+  Claude's call).
+- For `lsdocs-protocol/v*` (protocol repository): attaches
+  `schema.tar.gz`, replacing today's `release.yml` (removed).
+  lsdocs.github.io's `schemas` task looks up the newest
+  `lsdocs-protocol/v*` release through the GitHub API instead of
+  `releases/latest` (Claude's call).
 - For `lsdocs/v*` (lsdocs repository): calls `lsdocs/.github`'s
   `build-bin.yml`, downloads its artifacts, `gh release upload`s them.
 - For a binding crate's tag (plugin-sdk, rst): calls `build-wheels.yml` or
