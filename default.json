@@ -1,0 +1,46 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "description": "The lsdocs organization's Renovate preset. Each repository's renovate.json extends it: \"extends\": [\"local>lsdocs/.github\"].",
+  "extends": [
+    "config:recommended",
+    "helpers:pinGitHubActionDigests"
+  ],
+  "mise": {
+    "managerFilePatterns": [
+      "/(^|/)\\.config/mise(\\.[^/]+)?\\.toml$/"
+    ]
+  },
+  "packageRules": [
+    {
+      "description": "One PR per upstream lsdocs repository whose crates were released together.",
+      "matchManagers": ["cargo"],
+      "matchPackageNames": ["lsdocs-config", "lsdocs-protocol"],
+      "groupName": "lsdocs-protocol"
+    },
+    {
+      "matchManagers": ["cargo"],
+      "matchPackageNames": ["lsdocs-plugin-sdk", "lsdocs-rpc"],
+      "groupName": "lsdocs-plugin-sdk"
+    },
+    {
+      "matchManagers": ["cargo"],
+      "matchPackageNames": ["lsdocs-rst", "lsdocs-parser-rst"],
+      "groupName": "lsdocs-rst"
+    },
+    {
+      "matchManagers": ["cargo"],
+      "matchPackageNames": ["lsdocs-apidoc", "lsdocs-apidoc-plugin"],
+      "groupName": "lsdocs-apidoc"
+    },
+    {
+      "matchManagers": ["cargo"],
+      "matchPackageNames": ["lsdocs", "lsdocs-host"],
+      "groupName": "lsdocs"
+    },
+    {
+      "description": "Conventional Commits titles for every Renovate PR.",
+      "matchPackageNames": ["*"],
+      "semanticCommits": "enabled"
+    }
+  ]
+}
