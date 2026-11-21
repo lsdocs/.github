@@ -1,0 +1,9 @@
+# zizmor's configuration, for this repository and (with `--config`) for the
+# organization's repositories that call its workflows.
+rules:
+  unpinned-uses:
+    config:
+      policies:
+        # The organization's own actions and workflows: a branch or tag.
+        "lsdocs/*": ref-pin
+        "*": hash-pin

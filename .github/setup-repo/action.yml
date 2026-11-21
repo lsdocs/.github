@@ -1,6 +1,15 @@
 name: Setup Repository
 description: Sets up the repository with necessary tools.
 
+inputs:
+  mise-install-args:
+    description: >-
+      Tools for mise to install (passed to `mise install`), for example
+      `cargo:nur`. Empty installs everything the repository's mise config
+      names.
+    required: false
+    default: ""
+
 runs:
   using: "composite"
   steps:
@@ -21,8 +30,12 @@ runs:
         key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
     - name: Install cargo-binstall
       uses: cargo-bins/cargo-binstall@5885714d0a40a14b2535c6ffc051fd8e49aa9665 # v1.27.0
+    # mise-action exports MISE_TRUSTED_CONFIG_PATHS (the workspace) for later
+    # steps, so the repository's mise config (with its [settings]) loads.
     - name: Setup tooling with mise
       uses: jdx/mise-action@90f833d396d0cc3674b631d2d225e306476c303a # v5.2.10
+      with:
+        install_args: ${{ inputs.mise-install-args }}
       env:
         # token just used for auth (rate limit increase)
         GITHUB_TOKEN: ${{ github.token }}
