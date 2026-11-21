@@ -44,9 +44,9 @@
 - Produces: `msrv.yml` and `deny.yml`, both `workflow_call` with no inputs, on `ubuntu-latest`. `setup-repo` gets `mise-install-args: cargo:nur`, then `nur msrv` / `nur deny` runs.
 - All three: top-level `permissions: {}`, job-level `permissions: contents: read`, `env: CARGO_TERM_COLOR: always`. Pass `apt-packages` to the shell through `env:`, never by interpolating it into `run:`, so zizmor's template-injection check passes.
 
-- [ ] **Step 1:** Lint the current state, to confirm the tools run: `mise exec actionlint@1.7.12 zizmor@latest -- actionlint .github/setup-repo/action.yml` (from `C:\dev\lsdocs-org`). Expected: it runs (actionlint may report nothing for an action file).
+- [ ] **Step 1:** Lint the current state, to confirm the tools run: `mise exec zizmor@latest -- zizmor .github` (from `C:\dev\lsdocs-org`). Expected: it runs and reports on `setup-repo`.
 - [ ] **Step 2:** Add the input and env to `setup-repo`, and write the three workflows to the interfaces above.
-- [ ] **Step 3:** Run `mise exec actionlint@1.7.12 -- actionlint .github/workflows/*.yml` and `mise exec zizmor@latest -- zizmor .github`. Expected: no errors. zizmor findings at `medium` and above are fixed, or ignored inline with a reason, as `setup-repo` does for cache-poisoning.
+- [ ] **Step 3:** Run `mise exec zizmor@latest -- zizmor .github`. Expected: no errors. zizmor findings at `medium` and above are fixed, or ignored inline with a reason, as `setup-repo` does for cache-poisoning.
 - [ ] **Step 4:** Commit `feat(ci): reusable ci, msrv and deny workflows` and push `setup-reusable-ci`.
 
 ### Task 2: mise down to nur, `nur deny` through `MISE_ENV=deny` (every repository)
@@ -94,6 +94,6 @@
   - lsdocs: keeps its `core` job as it is, using `setup-repo` directly.
   - The repositories still on `actions/checkout@v4` / `Swatinem/rust-cache@v2` / `jdx/mise-action@v2` lose those steps (setup-repo does them).
 
-- [ ] **Step 1:** Rewrite each `ci.yml`. Run `mise exec actionlint@1.7.12 -- actionlint` in each repository: expected no errors. Run `mise exec zizmor@latest -- zizmor .github`: expected no findings at `medium` and above.
+- [ ] **Step 1:** Rewrite each `ci.yml`. Run `mise exec zizmor@latest -- zizmor .github`: expected no findings at `medium` and above.
 - [ ] **Step 2:** Commit `ci: call the organization's reusable workflows` in each, and push.
 - [ ] **Step 3:** Ask the user whether to open a draft PR to `main` for one repository (transform-toc), and for plugin-sdk (Node.js and Python), to see the workflows run. If they agree, check the Review Focus items in those runs' logs. Report each job's result and any failure with its log lines.
