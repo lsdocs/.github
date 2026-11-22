@@ -1,0 +1,40 @@
+# Packages and verify-builds every crate crates.io would get, as
+# `cargo publish` would, uploading nothing: `cargo publish --dry-run
+# --workspace` (`publish = false` crates are skipped; the workspace's
+# crates resolve each other at their new versions). A dependency from
+# another repository must already be on crates.io at the required version,
+# so a release PR fails here until its upstream release is published.
+#   uses: lsdocs/.github/.github/workflows/check-crates.yml@<ref>
+name: check-crates
+
+on:
+  workflow_call:
+    inputs:
+      apt-packages:
+        description: >-
+          Packages to install with apt before setup, separated by spaces
+          (for example `libclang-dev`).
+        type: string
+        default: ""
+
+permissions: {}
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Install apt packages
+        if: inputs.apt-packages != ''
+        env:
+          APT_PACKAGES: ${{ inputs.apt-packages }}
+        # Word splitting on purpose: one argument per package.
+        run: sudo apt-get update && sudo apt-get install -y $APT_PACKAGES
+      - uses: lsdocs/.github/.github/setup-repo@main
+        with:
+          mise-install-args: cargo:nur
+      - run: cargo publish --dry-run --workspace --locked

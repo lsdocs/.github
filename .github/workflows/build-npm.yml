@@ -1,7 +1,9 @@
 # Builds a napi-rs package: the addon per target (cross on Linux), then the
 # main package and one package per platform (napi's usual layout, npm/), all
-# at `version`, packed with npm pack. Uploads `npm-packages` (the .tgz
-# files). Publishes nothing.
+# at `version`, checked (publint; the main package's types with attw) and
+# packed with npm pack. Uploads `npm-packages` (the .tgz files). Publishes
+# nothing. The package needs `publint` and `@arethetypeswrong/cli` in its
+# devDependencies (their versions are the package's to pin).
 #   uses: lsdocs/.github/.github/workflows/build-npm.yml@<ref>
 name: build-npm
 
@@ -110,6 +112,15 @@ jobs:
             -e "s/(bindingPackageVersion !== ')[^']*'/\1$VERSION'/" \
             -e "s/expected [^ ]+ but got/expected $VERSION but got/" \
             native.js
+      # publint: each package's package.json against its packed files.
+      # attw: the main package's type declarations, as each module
+      # resolution mode finds them.
+      - name: Check the packages
+        run: |
+          for dir in npm/*/ .; do
+            npx --no-install publint --strict "$dir"
+          done
+          npx --no-install attw --pack .
       - name: Packs
         run: |
           mkdir -p packages
