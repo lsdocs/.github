@@ -38,6 +38,16 @@
       "groupName": "lsdocs"
     },
     {
+      "description": "GitHub Actions updates (pinned SHAs and their version comments) in one PR of their own.",
+      "matchManagers": ["github-actions"],
+      "groupName": "GitHub Actions"
+    },
+    {
+      "description": "mise tool versions (.config/mise*.toml) in one PR of their own.",
+      "matchManagers": ["mise"],
+      "groupName": "mise tools"
+    },
+    {
       "description": "Conventional Commits titles for every Renovate PR.",
       "matchPackageNames": ["*"],
       "semanticCommits": "enabled"
