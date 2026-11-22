@@ -45,12 +45,15 @@ jobs:
       - uses: lsdocs/.github/.github/setup-repo@main
         with:
           mise-install-args: cargo:nur
+      # The Python maturin builds for, named by version alone (`3.11`,
+      # `3.15t`): a `python` prefix is not found in maturin's Linux
+      # containers. Without one, maturin builds a version-specific wheel
+      # from whatever interpreter it finds, or fails on Linux when it finds
+      # none. Windows on ARM needs an arm64 one.
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
-        if: startsWith(matrix.target, 'aarch64-pc-windows')
         with:
-          python-version: ${{ matrix.abi == 'abi3t-py315' && '3.15' || '3.11' }}
-          freethreaded: ${{ matrix.abi == 'abi3t-py315' }}
-          architecture: arm64
+          python-version: ${{ matrix.abi == 'abi3t-py315' && '3.15t' || '3.11' }}
+          architecture: ${{ startsWith(matrix.target, 'aarch64-pc-windows') && 'arm64' || '' }}
       # On Linux, zig cross-compiles on the host (manylinux/musllinux tags
       # without a container), except ppc64le, which builds in maturin's
       # manylinux container.
@@ -65,6 +68,7 @@ jobs:
           args: >-
             --release --locked --out dist
             --features pyo3/${{ matrix.abi }}
+            --interpreter ${{ matrix.abi == 'abi3t-py315' && '3.15t' || '3.11' }}
             ${{ contains(matrix.target, 'linux')
             && !startsWith(matrix.target, 'powerpc64le') && '--zig' || '' }}
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -112,3 +116,15 @@ jobs:
         with:
           python-version: "3.x"
       - run: pipx run twine check --strict dist/*
+      # Every wheel is a stable-ABI one (abi3, or abi3t), not one tagged for
+      # whichever interpreter maturin found.
+      - name: Check the wheel tags
+        run: |
+          bad=0
+          for w in dist/*.whl; do
+            case "$w" in
+              *-abi3-*|*.abi3t-*) ;;
+              *) echo "::error::$w is not a stable-ABI wheel"; bad=1 ;;
+            esac
+          done
+          exit $bad

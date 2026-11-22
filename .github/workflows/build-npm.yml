@@ -95,10 +95,12 @@ jobs:
           npx napi create-npm-dirs
           npx napi artifacts --output-dir artifacts
       # `napi version` gives the platform packages the main package's
-      # version. `napi pre-publish --skip-optional-publish` adds them as the
-      # main package's optionalDependencies (not in the committed
-      # package.json: npm ci would need them in the lock before they exist
-      # on npm) and checks each has its addon; it publishes nothing. napi
+      # version. `napi pre-publish --skip-optional-publish --no-gh-release`
+      # adds them as the main package's optionalDependencies (not in the
+      # committed package.json: npm ci would need them in the lock before
+      # they exist on npm) and checks each has its addon; it publishes
+      # nothing (without --no-gh-release it would also make a GitHub release,
+      # and fails in CI looking for a release commit). napi
       # has no command for the platform package version native.js expects,
       # hence the sed.
       - name: Versions
@@ -107,7 +109,7 @@ jobs:
         run: |
           npm version "$VERSION" --no-git-tag-version --allow-same-version
           npx napi version
-          npx napi pre-publish --skip-optional-publish
+          npx napi pre-publish --skip-optional-publish --no-gh-release
           sed -i -E \
             -e "s/(bindingPackageVersion !== ')[^']*'/\1$VERSION'/" \
             -e "s/expected [^ ]+ but got/expected $VERSION but got/" \
