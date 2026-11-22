@@ -1,5 +1,6 @@
-# Builds a crate's binary for each target and archives it with the LICENSE
-# files (.zip on Windows, .tar.gz elsewhere), as cargo-binstall expects.
+# Builds a crate's binary for each target, runs it with `--version` where the
+# runner can, and archives it with the LICENSE files (.zip on Windows,
+# .tar.gz elsewhere), as cargo-binstall expects.
 # Uploads one artifact per target, `bin-<target>`. Publishes nothing.
 #   uses: lsdocs/.github/.github/workflows/build-bin.yml@<ref>
 name: build-bin
@@ -64,6 +65,19 @@ jobs:
         run: |
           rustup target add "$TARGET"
           cargo build --release --locked -p "$PACKAGE" --target "$TARGET"
+      # Every runner can run its targets' binaries except Linux's, which
+      # runs only x86_64 (aarch64 is cross-built). macOS on ARM runs x86_64
+      # through Rosetta 2.
+      - name: Smoke test
+        if: ${{ !contains(matrix.target, 'linux') || startsWith(matrix.target, 'x86_64') }}
+        shell: bash
+        env:
+          PACKAGE: ${{ inputs.package }}
+          TARGET: ${{ matrix.target }}
+        run: |
+          ext=""
+          if [[ "$TARGET" == *windows* ]]; then ext=.exe; fi
+          "target/$TARGET/release/$PACKAGE$ext" --version
       - name: Archive
         shell: bash
         env:
