@@ -42,8 +42,9 @@ The binding crates share their wrapped crate's version (release-plz
   (Metadata: read is implied). No webhook.
 - Install it on the 18 releasing repositories (below).
 - Organization secrets, available to those repositories:
-  `RELEASE_APP_ID` (the App's ID) and `RELEASE_APP_PRIVATE_KEY` (a private
-  key generated for it).
+  `RELEASE_APP_CLIENT_ID` (the App's client ID, on its settings page; not
+  the App ID, which `actions/create-github-app-token` deprecates) and
+  `RELEASE_APP_PRIVATE_KEY` (a private key generated for it).
 
 The workflows mint a token from it per run
 (`actions/create-github-app-token`); tags and PRs made with it start other
