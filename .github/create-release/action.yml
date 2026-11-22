@@ -1,0 +1,43 @@
+name: Create Release
+description: >-
+  Creates the GitHub release for a `<crate>/v<version>` tag with `gh`, its
+  notes the crate's CHANGELOG.md section for that version. Runs in the
+  releasing repository's own job (which needs `contents: write`).
+
+inputs:
+  latest:
+    description: Mark the release as the repository's latest ("true" or "false").
+    required: false
+    default: "false"
+  token:
+    description: Token for gh (needs contents write).
+    required: false
+    default: ${{ github.token }}
+
+runs:
+  using: "composite"
+  steps:
+    - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        persist-credentials: false
+    # nushell, for release-notes.nu (the release nur bundles).
+    - uses: jdx/mise-action@90f833d396d0cc3674b631d2d225e306476c303a # v5.2.10
+      with:
+        # A tag build: no cache (cache poisoning).
+        cache: false
+        mise_toml: |
+          [tools]
+          "github:nushell/nushell" = "0.117.0"
+    - name: Create the release
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.token }}
+        TAG: ${{ github.ref_name }}
+        LATEST: ${{ inputs.latest }}
+      run: |
+        # The crate's CHANGELOG.md section for the version (release-notes.nu
+        # finds it through nushell's Markdown parser).
+        nu "$GITHUB_ACTION_PATH/release-notes.nu" "$TAG" > notes.md
+        [ -s notes.md ] || echo "Release $TAG." > notes.md
+        gh release create "$TAG" --title "$TAG" --notes-file notes.md \
+          --verify-tag "--latest=$LATEST"
