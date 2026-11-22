@@ -38,6 +38,12 @@
       "groupName": "lsdocs"
     },
     {
+      "description": "The organization's own workflows and actions (lsdocs/.github, used at @main): no digest pins or updates; zizmor's ref-pin policy allows them.",
+      "matchManagers": ["github-actions"],
+      "matchPackageNames": ["lsdocs/.github", "lsdocs/**"],
+      "enabled": false
+    },
+    {
       "description": "GitHub Actions updates (pinned SHAs and their version comments) in one PR of their own.",
       "matchManagers": ["github-actions"],
       "groupName": "GitHub Actions"

@@ -1,0 +1,69 @@
+# Builds a repository's API pages (`nur api`) and deploys them to GitHub
+# Pages. Called from a repository's pages workflow, which grants
+# `pages: write` and `id-token: write`:
+#   uses: lsdocs/.github/.github/workflows/pages.yml@<ref>
+name: pages
+
+on:
+  workflow_call:
+    inputs:
+      path:
+        description: The built site's directory.
+        type: string
+        default: api/site
+      apt-packages:
+        description: >-
+          Packages to install with apt before setup, separated by spaces
+          (for example `libclang-dev`).
+        type: string
+        default: ""
+      rust-toolchains:
+        description: >-
+          Extra Rust toolchains to install with rustup, separated by spaces
+          (for example the nightly lsdocs' apidoc-rust runs).
+        type: string
+        default: ""
+
+permissions: {}
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Install apt packages
+        if: inputs.apt-packages != ''
+        env:
+          APT_PACKAGES: ${{ inputs.apt-packages }}
+        # Word splitting on purpose: one argument per package.
+        run: sudo apt-get update && sudo apt-get install -y $APT_PACKAGES
+      - uses: lsdocs/.github/.github/setup-repo@main
+        with:
+          mise-install-args: cargo:nur
+      - name: Install extra Rust toolchains
+        if: inputs.rust-toolchains != ''
+        env:
+          TOOLCHAINS: ${{ inputs.rust-toolchains }}
+        # Word splitting on purpose: one argument per toolchain.
+        run: rustup toolchain install $TOOLCHAINS --profile minimal
+      - run: nur api
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: ${{ inputs.path }}
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1

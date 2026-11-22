@@ -7,8 +7,8 @@ name: release-pr
 on:
   workflow_call:
     secrets:
-      app-id:
-        description: The release GitHub App's ID.
+      client-id:
+        description: The release GitHub App's client ID.
         required: true
       app-private-key:
         description: The release GitHub App's private key.
@@ -29,7 +29,7 @@ jobs:
       - uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc # v3.4.0
         id: app-token
         with:
-          app-id: ${{ secrets.app-id }}
+          client-id: ${{ secrets.client-id }}
           private-key: ${{ secrets.app-private-key }}
           # Only what release-plz needs for the release PR.
           permission-contents: write
