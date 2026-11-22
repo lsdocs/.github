@@ -34,8 +34,10 @@ jobs:
       fail-fast: false
       matrix:
         target: ${{ fromJSON(inputs.targets) }}
+    # Windows on ARM builds on an ARM runner.
     runs-on: >-
-      ${{ contains(matrix.target, 'windows') && 'windows-latest'
+      ${{ startsWith(matrix.target, 'aarch64-pc-windows') && 'windows-11-arm'
+      || contains(matrix.target, 'windows') && 'windows-latest'
       || contains(matrix.target, 'apple') && 'macos-latest'
       || 'ubuntu-latest' }}
     permissions:
