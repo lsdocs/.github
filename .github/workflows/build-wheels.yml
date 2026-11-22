@@ -45,12 +45,16 @@ jobs:
       - uses: lsdocs/.github/.github/setup-repo@main
         with:
           mise-install-args: cargo:nur
+      # A Python for maturin: Windows on ARM needs an arm64 one, and abi3t
+      # a free-threaded 3.15 (maturin builds a version-specific wheel from
+      # any other interpreter it finds, and fails on Linux when it finds
+      # none). abi3 builds need no interpreter elsewhere.
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
-        if: startsWith(matrix.target, 'aarch64-pc-windows')
+        if: startsWith(matrix.target, 'aarch64-pc-windows') || matrix.abi == 'abi3t-py315'
         with:
           python-version: ${{ matrix.abi == 'abi3t-py315' && '3.15' || '3.11' }}
           freethreaded: ${{ matrix.abi == 'abi3t-py315' }}
-          architecture: arm64
+          architecture: ${{ startsWith(matrix.target, 'aarch64-pc-windows') && 'arm64' || '' }}
       # On Linux, zig cross-compiles on the host (manylinux/musllinux tags
       # without a container), except ppc64le, which builds in maturin's
       # manylinux container.
@@ -65,6 +69,7 @@ jobs:
           args: >-
             --release --locked --out dist
             --features pyo3/${{ matrix.abi }}
+            ${{ matrix.abi == 'abi3t-py315' && '--interpreter python3.15t' || '' }}
             ${{ contains(matrix.target, 'linux')
             && !startsWith(matrix.target, 'powerpc64le') && '--zig' || '' }}
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -112,3 +117,15 @@ jobs:
         with:
           python-version: "3.x"
       - run: pipx run twine check --strict dist/*
+      # Every wheel is a stable-ABI one (abi3, or abi3t), not one tagged for
+      # whichever interpreter maturin found.
+      - name: Check the wheel tags
+        run: |
+          bad=0
+          for w in dist/*.whl; do
+            case "$w" in
+              *-abi3-*|*.abi3t-*) ;;
+              *) echo "::error::$w is not a stable-ABI wheel"; bad=1 ;;
+            esac
+          done
+          exit $bad
