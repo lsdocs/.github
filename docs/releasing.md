@@ -89,7 +89,8 @@ lsdocs-apidoc, lsdocs-apidoc-plugin; lsdocs-apidoc-clang, -python, -rust,
 npm platform packages: `-darwin-arm64`, `-darwin-x64`, `-linux-arm64-gnu`,
 `-linux-x64-gnu`, `-linux-x64-musl`, `-win32-arm64-msvc`,
 `-win32-x64-msvc` after `@lsdocs/plugin` and `@lsdocs/rst`
-(`bindings/node/npm/` in those repositories).
+(napi's per-platform packages, one per target in `napi.targets` of
+`bindings/node/package.json`; `build-npm.yml` generates them).
 
 **crates.io and npm can only add a trusted publisher to a package that
 exists** ("initial publish requires an API token", crates.io's docs).
