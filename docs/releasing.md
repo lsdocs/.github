@@ -12,7 +12,9 @@ and how the first release goes. Design:
    for the crates changed since their last release (Conventional Commits).
    It opens as a draft (`pr_draft`), so its CI is the usual checks only.
 2. **Mark it ready for review when you want to release.** That runs a
-   dry run of the release (in place of the usual checks):
+   dry run of the release, the repository's `release-check.yml` (not part
+   of `ci.yml`, whose path filter skips a release PR that changes only
+   changelogs; it runs again on each update of the PR):
    `check-crates.yml` packages and verify-builds the crates as crates.io
    would get them, which fails until the upstream crates they need are
    published. In lsdocs, lsdocs-plugin-sdk and lsdocs-rst, it also runs
