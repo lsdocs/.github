@@ -135,15 +135,34 @@ For each repository, in that order:
    environment, a secret `CARGO_REGISTRY_TOKEN`: a crates.io API token with
    the `publish-new` and `publish-update` scopes (crate pattern `lsdocs*`).
    For lsdocs-plugin-sdk and lsdocs-rst, also `NPM_TOKEN`: an npm granular
-   token that can publish to the `@lsdocs` scope. For those two, add the
-   PyPI pending publisher now.
+   token, read and write for the `@lsdocs` scope, *without* bypass-2FA
+   (npm is ending direct publishing with bypass-2FA tokens, targeting
+   January 2027; any token can still stage). With it, `tag.yml` stages
+   each npm package (`npm stage publish`, no provenance) instead of
+   publishing it. For those two, add the PyPI pending publisher now.
 3. **Mark the release PR ready for review, then merge it** (it proposes the crates at 0.1.0 with their
    first changelogs). The crates are published, tagged, and `tag.yml`
-   makes the releases and publishes the bindings.
+   makes the releases and publishes the bindings (the npm ones staged).
+   For lsdocs-plugin-sdk and lsdocs-rst, **approve the eight staged npm
+   packages**: npmjs.com's Staged Packages tab, or `npm stage list` and
+   `npm stage approve <id>` (both ask for 2FA). A new package name shows
+   a placeholder `0.0.0-stage` version until then.
 4. **Switch to trusted publishing.** Add the crates.io trusted publisher
    for each crate just published (and the npm ones), then delete
    `CARGO_REGISTRY_TOKEN` (and `NPM_TOKEN`). Without the secret, the
-   workflows use trusted publishing.
+   workflows use trusted publishing (npm: `npm publish --provenance`).
+   For npm, one command per package (npm 11.15 or later, asks for 2FA);
+   for lsdocs-rst, `@lsdocs/rst` and the repository `lsdocs-rst`:
+   ```nu
+   [plugin plugin-darwin-arm64 plugin-darwin-x64 plugin-linux-arm64-gnu
+    plugin-linux-x64-gnu plugin-linux-x64-musl plugin-win32-arm64-msvc
+    plugin-win32-x64-msvc] | each {|p|
+     npm trust github $"@lsdocs/($p)" --file tag.yml --repo lsdocs/lsdocs-plugin-sdk --env release --allow-publish -y
+   }
+   ```
+   A new trusted publisher expires unless a publish uses it within two
+   days; the next release's publish does, so set them up close to it, or
+   check with `npm trust list <package>` after it.
 
 ## Every later release
 
