@@ -10,11 +10,19 @@ and how the first release goes. Design:
    The `release-pr` job (`lsdocs/.github`'s `release-pr.yml`) opens or
    updates the **release PR**: release-plz's version bumps and changelogs
    for the crates changed since their last release (Conventional Commits).
-2. **Merging the release PR is the authorization.** On that merge, the
+   It opens as a draft (`pr_draft`), so its CI is the usual checks only.
+2. **Mark it ready for review when you want to release.** That runs a
+   dry run of the release (in place of the usual checks):
+   `check-crates.yml` packages and verify-builds the crates as crates.io
+   would get them, which fails until the upstream crates they need are
+   published. In lsdocs, lsdocs-plugin-sdk and lsdocs-rst, it also runs
+   `tag.yml`'s builds, every target, with their checks (`twine check`,
+   publint and attw, the binaries' `--version`). A draft cannot be merged.
+3. **Merging the release PR is the authorization.** On that merge, the
    `release` job publishes the bumped crates to crates.io and pushes their
    `<crate>/v<version>` tags. On any other push it does nothing
    (`release_always = false` in `.config/release-plz.toml`).
-3. Each tag runs the repository's `tag.yml`: the GitHub release (with the
+4. Each tag runs the repository's `tag.yml`: the GitHub release (with the
    crate's changelog section; `lsdocs/.github`'s `create-release` action),
    plus, by tag:
    - `lsdocs/v*` (lsdocs): the `lsdocs` binaries for cargo-binstall
@@ -127,7 +135,7 @@ For each repository, in that order:
    For lsdocs-plugin-sdk and lsdocs-rst, also `NPM_TOKEN`: an npm granular
    token that can publish to the `@lsdocs` scope. For those two, add the
    PyPI pending publisher now.
-3. **Merge the release PR** (it proposes the crates at 0.1.0 with their
+3. **Mark the release PR ready for review, then merge it** (it proposes the crates at 0.1.0 with their
    first changelogs). The crates are published, tagged, and `tag.yml`
    makes the releases and publishes the bindings.
 4. **Switch to trusted publishing.** Add the crates.io trusted publisher
