@@ -20,6 +20,14 @@ runs:
     - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         persist-credentials: false
+    # nushell, for release-notes.nu (the release nur bundles).
+    - uses: jdx/mise-action@90f833d396d0cc3674b631d2d225e306476c303a # v5.2.10
+      with:
+        # A tag build: no cache (cache poisoning).
+        cache: false
+        mise_toml: |
+          [tools]
+          "github:nushell/nushell" = "0.117.0"
     - name: Create the release
       shell: bash
       env:
@@ -27,19 +35,9 @@ runs:
         TAG: ${{ github.ref_name }}
         LATEST: ${{ inputs.latest }}
       run: |
-        crate="${TAG%/v*}"
-        version="${TAG##*/v}"
-        # The crate's directory: the Cargo.toml whose package is `crate`.
-        manifest=$(grep -rlx --include=Cargo.toml "name = \"$crate\"" . | head -n 1)
-        changelog="$(dirname "$manifest")/CHANGELOG.md"
-        # The section under "## [<version>]" (release-plz's heading), up to
-        # the next "## [".
-        if [ -f "$changelog" ]; then
-          awk -v v="$version" '
-            index($0, "## [" v "]") == 1 { found = 1; next }
-            found && index($0, "## [") == 1 { exit }
-            found { print }
-          ' "$changelog" > notes.md
-        fi
+        # The crate's CHANGELOG.md section for the version (release-notes.nu
+        # finds it through nushell's Markdown parser).
+        nu "$GITHUB_ACTION_PATH/release-notes.nu" "$TAG" > notes.md
         [ -s notes.md ] || echo "Release $TAG." > notes.md
-        gh release create "$TAG" --title "$TAG" --notes-file notes.md --verify-tag "--latest=$LATEST"
+        gh release create "$TAG" --title "$TAG" --notes-file notes.md \
+          --verify-tag "--latest=$LATEST"
