@@ -11,10 +11,13 @@ and how the first release goes. Design:
    updates the **release PR**: release-plz's version bumps and changelogs
    for the crates changed since their last release (Conventional Commits).
    It opens as a draft (`pr_draft`), so its CI is the usual checks only.
-2. **Mark it ready for review when you want to release.** In lsdocs,
-   lsdocs-plugin-sdk and lsdocs-rst, that runs `tag.yml`'s builds (every
-   target) as a dry run; elsewhere it changes nothing but the PR's state.
-   A draft cannot be merged.
+2. **Mark it ready for review when you want to release.** That runs a
+   dry run of the release (in place of the usual checks):
+   `check-crates.yml` packages and verify-builds the crates as crates.io
+   would get them, which fails until the upstream crates they need are
+   published. In lsdocs, lsdocs-plugin-sdk and lsdocs-rst, it also runs
+   `tag.yml`'s builds, every target, with their checks (`twine check`,
+   publint and attw, the binaries' `--version`). A draft cannot be merged.
 3. **Merging the release PR is the authorization.** On that merge, the
    `release` job publishes the bumped crates to crates.io and pushes their
    `<crate>/v<version>` tags. On any other push it does nothing
