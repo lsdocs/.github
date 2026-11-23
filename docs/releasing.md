@@ -76,7 +76,11 @@ lsdocs-apidoc-rust, lsdocs-apidoc-typescript, lsdocs.
 ### Renovate
 
 Install the Renovate GitHub App on the organization. Each repository's
-`renovate.json` extends `local>lsdocs/.github`.
+`renovate.json` extends `local>lsdocs/.github` (this repository's
+included). The preset groups updates: the organization's own crates and
+packages in one PR (`lsdocs packages`), and third-party dependencies in
+one PR per ecosystem (Rust, npm, Python), GitHub Actions and mise tools;
+major updates get a group PR of their own.
 
 ### Trusted publishers
 

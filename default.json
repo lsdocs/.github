@@ -6,36 +6,31 @@
     "helpers:pinGitHubActionDigests"
   ],
   "mise": {
-    "managerFilePatterns": [
-      "/(^|/)\\.config/mise(\\.[^/]+)?\\.toml$/"
-    ]
+    "managerFilePatterns": ["/(^|/)\\.config/mise(\\.[^/]+)?\\.toml$/"]
   },
   "packageRules": [
     {
-      "description": "One PR per upstream lsdocs repository whose crates were released together.",
-      "matchManagers": ["cargo"],
-      "matchPackageNames": ["lsdocs-config", "lsdocs-protocol"],
-      "groupName": "lsdocs-protocol"
+      "description": "Third-party Rust crates in one PR (majors in a PR of their own).",
+      "matchCategories": ["rust"],
+      "matchPackageNames": ["!lsdocs", "!lsdocs-*"],
+      "groupName": "Rust dependencies"
     },
     {
-      "matchManagers": ["cargo"],
-      "matchPackageNames": ["lsdocs-plugin-sdk", "lsdocs-rpc"],
-      "groupName": "lsdocs-plugin-sdk"
+      "description": "Third-party npm packages in one PR (majors in a PR of their own).",
+      "matchCategories": ["js"],
+      "matchPackageNames": ["!@lsdocs/**"],
+      "groupName": "npm dependencies"
     },
     {
-      "matchManagers": ["cargo"],
-      "matchPackageNames": ["lsdocs-rst", "lsdocs-parser-rst"],
-      "groupName": "lsdocs-rst"
+      "description": "Third-party Python packages in one PR (majors in a PR of their own).",
+      "matchCategories": ["python"],
+      "matchPackageNames": ["!lsdocs", "!lsdocs-*"],
+      "groupName": "Python dependencies"
     },
     {
-      "matchManagers": ["cargo"],
-      "matchPackageNames": ["lsdocs-apidoc", "lsdocs-apidoc-plugin"],
-      "groupName": "lsdocs-apidoc"
-    },
-    {
-      "matchManagers": ["cargo"],
-      "matchPackageNames": ["lsdocs", "lsdocs-host"],
-      "groupName": "lsdocs"
+      "description": "The organization's own crates and packages (crates.io, npm, PyPI) in one PR: a release wave updates them together.",
+      "matchPackageNames": ["lsdocs", "lsdocs-*", "@lsdocs/**"],
+      "groupName": "lsdocs packages"
     },
     {
       "description": "The organization's own workflows and actions (lsdocs/.github, used at @main): no digest pins or updates; zizmor's ref-pin policy allows them.",
