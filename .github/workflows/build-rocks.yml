@@ -1,6 +1,6 @@
 # Builds a Lua module made with mlua: the library per target and Lua
 # version (`--no-default-features --features <lua>,module`), renamed to
-# what `require` loads, loaded in that Lua as a smoke test where the runner
+# what `require` loads, loaded in that Lua (installed with mise) as a smoke test where the runner
 # can run it, and packed with the rockspec. The rockspec is written from a
 # template (`@VERSION@` replaced) and checked with `luarocks lint`. Uploads
 # `rock-<target>-<lua>` and `rockspec`. Publishes nothing.
@@ -53,6 +53,16 @@ on:
           luajit).
         type: string
         default: '["lua54", "luajit"]'
+      lua54-tool:
+        description: >-
+          The mise tool that runs the lua54 modules (`lua`; it also brings
+          LuaRocks, for the rockspec check).
+        type: string
+        default: lua@5.4.9
+      luajit-tool:
+        description: The mise tool that runs the luajit modules (`luajit`).
+        type: string
+        default: conda:luajit@2.1.1744318430
 
 permissions: {}
 
@@ -76,9 +86,15 @@ jobs:
       - uses: lsdocs/.github/.github/setup-repo@main
         with:
           mise-install-args: cargo:nur
-      - uses: leafo/gh-actions-lua@32909a2dea0a48c433aec79e7fcd31b4cd55800f # v13.1.0
-        with:
-          luaVersion: ${{ matrix.lua == 'luajit' && 'luajit-openresty' || '5.4' }}
+      # The interpreter for the smoke test, from mise (Lua is built from
+      # source; LuaJIT comes from conda-forge).
+      - name: Install Lua
+        if: matrix.target != 'x86_64-apple-darwin'
+        env:
+          LUA_TOOL: ${{ matrix.lua == 'luajit' && inputs.luajit-tool || inputs.lua54-tool }}
+          # The conda backend is experimental in mise.
+          MISE_EXPERIMENTAL: "1"
+        run: mise install "$LUA_TOOL"
       - name: Add the target
         env:
           TARGET: ${{ matrix.target }}
@@ -112,8 +128,11 @@ jobs:
         if: matrix.target != 'x86_64-apple-darwin'
         env:
           MODULE: ${{ inputs.module }}
+          LUA_TOOL: ${{ matrix.lua == 'luajit' && inputs.luajit-tool || inputs.lua54-tool }}
+          LUA_BIN: ${{ matrix.lua == 'luajit' && 'luajit' || 'lua' }}
+          MISE_EXPERIMENTAL: "1"
         run: >-
-          lua -e 'package.cpath = "dist/lib/?.so;" .. package.cpath
+          mise exec "$LUA_TOOL" -- "$LUA_BIN" -e 'package.cpath = "dist/lib/?.so;" .. package.cpath
           local m = require(os.getenv("MODULE"))
           assert(type(m) == "table", "the module is not a table")
           print(os.getenv("MODULE") .. " " .. tostring(m.version) .. " on " .. _VERSION)'
@@ -136,13 +155,14 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: lsdocs/.github/.github/setup-repo@main
         with:
-          persist-credentials: false
-      - uses: leafo/gh-actions-lua@32909a2dea0a48c433aec79e7fcd31b4cd55800f # v13.1.0
-        with:
-          luaVersion: "5.4"
-      - uses: leafo/gh-actions-luarocks@1c4a92caecc8f6850f673cbadfd57b3e555417ce # v6.1.1
+          mise-install-args: cargo:nur
+      # Lua with LuaRocks, from mise.
+      - name: Install Lua
+        env:
+          LUA_TOOL: ${{ inputs.lua54-tool }}
+        run: mise install "$LUA_TOOL"
       - name: Write the rockspec
         id: write
         working-directory: ${{ inputs.working-directory }}
@@ -158,7 +178,8 @@ jobs:
         working-directory: ${{ inputs.working-directory }}
         env:
           ROCKSPEC: ${{ steps.write.outputs.path }}
-        run: luarocks lint "$ROCKSPEC"
+          LUA_TOOL: ${{ inputs.lua54-tool }}
+        run: mise exec "$LUA_TOOL" -- luarocks lint "$ROCKSPEC"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: rockspec
