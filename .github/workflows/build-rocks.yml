@@ -1,0 +1,166 @@
+# Builds a Lua module made with mlua: the library per target and Lua
+# version (`--no-default-features --features <lua>,module`), renamed to
+# what `require` loads, loaded in that Lua as a smoke test where the runner
+# can run it, and packed with the rockspec. The rockspec is written from a
+# template (`@VERSION@` replaced) and checked with `luarocks lint`. Uploads
+# `rock-<target>-<lua>` and `rockspec`. Publishes nothing.
+#
+# The crate needs features `lua54`, `luajit` and `module` (each enabling
+# mlua's own).
+#   uses: lsdocs/.github/.github/workflows/build-rocks.yml@<ref>
+name: build-rocks
+
+on:
+  workflow_call:
+    inputs:
+      working-directory:
+        description: The binding crate's directory (its Cargo.toml).
+        type: string
+        required: true
+      crate:
+        description: The binding crate's package name (cargo -p).
+        type: string
+        required: true
+      library:
+        description: The crate's library name (its [lib] name).
+        type: string
+        required: true
+      module:
+        description: The name `require` loads (the luaopen_<module> symbol).
+        type: string
+        required: true
+      rockspec:
+        description: >-
+          The rockspec template, relative to working-directory; @VERSION@
+          becomes the crate's version.
+        type: string
+        required: true
+      version:
+        description: The version the rockspec gets (the binding crate's).
+        type: string
+        required: true
+      targets:
+        description: Target triples, as a JSON list.
+        type: string
+        # Windows is not built yet: a module there links the Lua library
+        # (lua54.lib / lua51.lib), which needs an MSVC Lua build to link to.
+        default: >-
+          ["x86_64-apple-darwin", "aarch64-apple-darwin",
+          "x86_64-unknown-linux-gnu", "aarch64-unknown-linux-gnu"]
+      lua-versions:
+        description: >-
+          Lua versions, as a JSON list of the crate's features (lua54,
+          luajit).
+        type: string
+        default: '["lua54", "luajit"]'
+
+permissions: {}
+
+jobs:
+  module:
+    name: module (${{ matrix.target }}, ${{ matrix.lua }})
+    strategy:
+      fail-fast: false
+      matrix:
+        target: ${{ fromJSON(inputs.targets) }}
+        lua: ${{ fromJSON(inputs.lua-versions) }}
+    # Native runners only: every module is loaded by a Lua of its target,
+    # except x86_64 macOS, built on an ARM runner (no smoke test).
+    runs-on: >-
+      ${{ contains(matrix.target, 'apple') && 'macos-latest'
+      || startsWith(matrix.target, 'aarch64') && 'ubuntu-24.04-arm'
+      || 'ubuntu-latest' }}
+    permissions:
+      contents: read
+    steps:
+      - uses: lsdocs/.github/.github/setup-repo@main
+        with:
+          mise-install-args: cargo:nur
+      - uses: leafo/gh-actions-lua@32909a2dea0a48c433aec79e7fcd31b4cd55800f # v13.1.0
+        with:
+          luaVersion: ${{ matrix.lua == 'luajit' && 'luajit-openresty' || '5.4' }}
+      - name: Add the target
+        env:
+          TARGET: ${{ matrix.target }}
+        run: rustup target add "$TARGET"
+      - name: Build the module
+        env:
+          TARGET: ${{ matrix.target }}
+          LUA: ${{ matrix.lua }}
+          CRATE: ${{ inputs.crate }}
+          # macOS: the Lua symbols come from the interpreter at load time.
+          RUSTFLAGS: >-
+            ${{ contains(matrix.target, 'apple')
+            && '-C link-arg=-undefined -C link-arg=dynamic_lookup' || '' }}
+        run: >-
+          cargo build --release --locked -p "$CRATE" --target "$TARGET"
+          --no-default-features --features "$LUA,module"
+      - name: Stage the module
+        env:
+          TARGET: ${{ matrix.target }}
+          LIBRARY: ${{ inputs.library }}
+          MODULE: ${{ inputs.module }}
+        run: |
+          mkdir -p dist/lib
+          case "$TARGET" in
+            *apple*) src="target/$TARGET/release/lib$LIBRARY.dylib" ;;
+            *) src="target/$TARGET/release/lib$LIBRARY.so" ;;
+          esac
+          # LuaRocks installs C modules as .so on macOS too.
+          cp "$src" "dist/lib/$MODULE.so"
+      - name: Load the module
+        if: matrix.target != 'x86_64-apple-darwin'
+        env:
+          MODULE: ${{ inputs.module }}
+        run: >-
+          lua -e 'package.cpath = "dist/lib/?.so;" .. package.cpath
+          local m = require(os.getenv("MODULE"))
+          assert(type(m) == "table", "the module is not a table")
+          print(os.getenv("MODULE") .. " " .. tostring(m.version) .. " on " .. _VERSION)'
+      - name: Pack
+        env:
+          TARGET: ${{ matrix.target }}
+          LUA: ${{ matrix.lua }}
+          MODULE: ${{ inputs.module }}
+          VERSION: ${{ inputs.version }}
+        run: tar -czf "$MODULE-$VERSION-$LUA-$TARGET.tar.gz" -C dist lib
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: rock-${{ matrix.target }}-${{ matrix.lua }}
+          path: "*.tar.gz"
+          if-no-files-found: error
+
+  # The rockspec as LuaRocks will see it.
+  rockspec:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: leafo/gh-actions-lua@32909a2dea0a48c433aec79e7fcd31b4cd55800f # v13.1.0
+        with:
+          luaVersion: "5.4"
+      - uses: leafo/gh-actions-luarocks@1c4a92caecc8f6850f673cbadfd57b3e555417ce # v6.1.1
+      - name: Write the rockspec
+        id: write
+        working-directory: ${{ inputs.working-directory }}
+        env:
+          TEMPLATE: ${{ inputs.rockspec }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          package=$(sed -n 's/^package = "\(.*\)"/\1/p' "$TEMPLATE")
+          out="$package-$VERSION-1.rockspec"
+          sed "s/@VERSION@/$VERSION/g" "$TEMPLATE" > "$out"
+          echo "path=$out" >> "$GITHUB_OUTPUT"
+      - name: Lint the rockspec
+        working-directory: ${{ inputs.working-directory }}
+        env:
+          ROCKSPEC: ${{ steps.write.outputs.path }}
+        run: luarocks lint "$ROCKSPEC"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: rockspec
+          path: ${{ inputs.working-directory }}/${{ steps.write.outputs.path }}
+          if-no-files-found: error
