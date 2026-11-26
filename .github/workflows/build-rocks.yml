@@ -46,10 +46,11 @@ on:
       targets:
         description: Target triples, as a JSON list.
         type: string
-        # Windows is not built yet: a module there links the Lua library
-        # (lua54.lib / lua51.lib), which needs an MSVC Lua build to link to.
+        # Windows modules bind lua54.dll / lua51.dll by name (mlua's
+        # raw-dylib linking: no Lua library needed to build them).
         default: >-
-          ["x86_64-apple-darwin", "aarch64-apple-darwin",
+          ["x86_64-pc-windows-msvc",
+          "x86_64-apple-darwin", "aarch64-apple-darwin",
           "x86_64-unknown-linux-gnu", "aarch64-unknown-linux-gnu"]
       lua-versions:
         description: >-
@@ -67,6 +68,18 @@ on:
         description: The mise tool that runs the luajit modules (`luajit`).
         type: string
         default: conda:luajit@2.1.1744318430
+      windows-lua54:
+        description: >-
+          setup-lua's lua-version for the Windows lua54 smoke test (an MSVC
+          build with lua54.dll).
+        type: string
+        default: "5.4.8"
+      windows-luajit:
+        description: >-
+          setup-lua's lua-version for the Windows luajit smoke test (an
+          MSVC build with lua51.dll).
+        type: string
+        default: luajit
       backend-ref:
         description: >-
           The lsdocs/.github ref whose luarocks-build-lsdocs-prebuilt the
@@ -87,11 +100,15 @@ jobs:
     # Native runners only: every module is loaded by a Lua of its target,
     # except x86_64 macOS, built on an ARM runner (no smoke test).
     runs-on: >-
-      ${{ contains(matrix.target, 'apple') && 'macos-latest'
+      ${{ contains(matrix.target, 'windows') && 'windows-latest'
+      || contains(matrix.target, 'apple') && 'macos-latest'
       || startsWith(matrix.target, 'aarch64') && 'ubuntu-24.04-arm'
       || 'ubuntu-latest' }}
     permissions:
       contents: read
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: lsdocs/.github/.github/setup-repo@main
         with:
@@ -99,7 +116,7 @@ jobs:
       # The interpreter for the smoke test, from mise (Lua is built from
       # source; LuaJIT comes from conda-forge).
       - name: Install Lua
-        if: matrix.target != 'x86_64-apple-darwin'
+        if: matrix.target != 'x86_64-apple-darwin' && !contains(matrix.target, 'windows')
         env:
           LUA_TOOL: ${{ matrix.lua == 'luajit' && inputs.luajit-tool || inputs.lua54-tool }}
           # The conda backend is experimental in mise.
@@ -118,7 +135,10 @@ jobs:
           RUSTFLAGS: >-
             ${{ contains(matrix.target, 'apple')
             && '-C link-arg=-undefined -C link-arg=dynamic_lookup' || '' }}
+        # Windows: no LUA_LIB_NAME, so mlua binds the Lua DLL by name
+        # (raw-dylib) instead of linking an import library.
         run: >-
+          env -u LUA_LIB_NAME -u LUA_LIB
           cargo build --release --locked -p "$CRATE" --target "$TARGET"
           --no-default-features --features "$LUA,module"
       - name: Stage the module
@@ -128,21 +148,36 @@ jobs:
           MODULE: ${{ inputs.module }}
         run: |
           mkdir -p dist/lib
+          # LuaRocks installs C modules as .so on macOS too, .dll on Windows.
           case "$TARGET" in
-            *apple*) src="target/$TARGET/release/lib$LIBRARY.dylib" ;;
-            *) src="target/$TARGET/release/lib$LIBRARY.so" ;;
+            *windows*) cp "target/$TARGET/release/$LIBRARY.dll" "dist/lib/$MODULE.dll" ;;
+            *apple*) cp "target/$TARGET/release/lib$LIBRARY.dylib" "dist/lib/$MODULE.so" ;;
+            *) cp "target/$TARGET/release/lib$LIBRARY.so" "dist/lib/$MODULE.so" ;;
           esac
-          # LuaRocks installs C modules as .so on macOS too.
-          cp "$src" "dist/lib/$MODULE.so"
+      # Windows: an MSVC Lua 5.4 (lua54.dll) or LuaJIT (lua51.dll), the DLL
+      # names the module binds, for the smoke test. In .lua, on PATH.
+      - uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1.13.0
+        if: contains(matrix.target, 'windows')
+      - uses: luau-project/setup-lua@95a68882fb62b1b14c936e15c4d67128e77281f7 # v3.0.0
+        if: contains(matrix.target, 'windows')
+        with:
+          lua-version: ${{ matrix.lua == 'luajit' && inputs.windows-luajit || inputs.windows-lua54 }}
+          # A tag build: no cache (cache poisoning).
+          use-cache: "false"
       - name: Load the module
         if: matrix.target != 'x86_64-apple-darwin'
         env:
           MODULE: ${{ inputs.module }}
+          TARGET: ${{ matrix.target }}
           LUA_TOOL: ${{ matrix.lua == 'luajit' && inputs.luajit-tool || inputs.lua54-tool }}
           LUA_BIN: ${{ matrix.lua == 'luajit' && 'luajit' || 'lua' }}
           MISE_EXPERIMENTAL: "1"
-        run: >-
-          mise exec "$LUA_TOOL" -- "$LUA_BIN" -e 'package.cpath = "dist/lib/?.so;" .. package.cpath
+        run: |
+          ext=so
+          run=(mise exec "$LUA_TOOL" -- "$LUA_BIN")
+          # Windows: setup-lua's interpreter, on PATH.
+          case "$TARGET" in *windows*) ext=dll; run=("$LUA_BIN") ;; esac
+          EXT=$ext "${run[@]}" -e 'package.cpath = "dist/lib/?." .. os.getenv("EXT") .. ";" .. package.cpath
           local m = require(os.getenv("MODULE"))
           assert(type(m) == "table", "the module is not a table")
           print(os.getenv("MODULE") .. " " .. tostring(m.version) .. " on " .. _VERSION)'

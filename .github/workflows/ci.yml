@@ -15,6 +15,12 @@ on:
           spaces (for example `libclang-dev`).
         type: string
         default: ""
+      msvc-dev-cmd:
+        description: >-
+          On Windows, load an MSVC developer prompt (ilammy/msvc-dev-cmd)
+          before `nur ci`; for example for mlua's vendored LuaJIT.
+        type: boolean
+        default: false
 
 permissions: {}
 
@@ -39,5 +45,7 @@ jobs:
           APT_PACKAGES: ${{ inputs.apt-packages }}
         # Word splitting on purpose: one argument per package.
         run: sudo apt-get update && sudo apt-get install -y $APT_PACKAGES
+      - uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1.13.0
+        if: runner.os == 'Windows' && inputs.msvc-dev-cmd
       - uses: lsdocs/.github/.github/setup-repo@main
       - run: nur ci
