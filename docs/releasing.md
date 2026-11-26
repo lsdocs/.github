@@ -19,7 +19,8 @@ and how the first release goes. Design:
    would get them, which fails until the upstream crates they need are
    published. In lsdocs, lsdocs-plugin-sdk and lsdocs-rst, it also runs
    `tag.yml`'s builds, every target, with their checks (`twine check`,
-   publint and attw, the binaries' `--version`). A draft cannot be merged.
+   publint and attw, the binaries' `--version`, each Lua module loaded in
+   its Lua and `luarocks lint` on the rockspec). A draft cannot be merged.
 3. **Merging the release PR is the authorization.** On that merge, the
    `release` job publishes the bumped crates to crates.io and pushes their
    `<crate>/v<version>` tags. On any other push it does nothing
@@ -35,13 +36,18 @@ and how the first release goes. Design:
      (`build-wheels.yml`), published to PyPI.
    - `lsdocs-plugin-node/v*`, `lsdocs-rst-node/v*`: the napi packages
      (`build-npm.yml`), published to npm, platform packages first.
+   - `lsdocs-plugin-lua/v*`, `lsdocs-rst-lua/v*`: the Lua modules, per
+     target and Lua version, and the rockspec (`build-rocks.yml`),
+     attached to the release like lsdocs' binaries. Nothing goes to
+     luarocks.org yet; `luarocks install <the rockspec's release URL>`
+     builds from the tag with cargo.
 4. Renovate (the organization preset, `default.json` here) opens PRs in the
    repositories that depend on the released crates.
 
 The binding crates share their wrapped crate's version (release-plz
-`version_group`): `lsdocs-plugin-python` and `lsdocs-plugin-node` with
-`lsdocs-plugin-sdk`; `lsdocs-rst-python` and `lsdocs-rst-node` with
-`lsdocs-rst`.
+`version_group`): `lsdocs-plugin-python`, `lsdocs-plugin-node` and
+`lsdocs-plugin-lua` with `lsdocs-plugin-sdk`; `lsdocs-rst-python`,
+`lsdocs-rst-node` and `lsdocs-rst-lua` with `lsdocs-rst`.
 
 ## One-time setup
 
