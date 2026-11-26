@@ -1,0 +1,115 @@
+# luarocks-build-lsdocs-prebuilt, this repository's LuaRocks build backend
+# (luarocks-build-lsdocs-prebuilt/). On pull requests that change it: its
+# rockspecs linted, and the development rockspec installed in Lua 5.4
+# and LuaJIT. (The bindings' release check,
+# build-rocks.yml, installs real modules with it.) A
+# `luarocks-build-lsdocs-prebuilt/v<version>` tag uploads that version's
+# rockspec to luarocks.org, with the `release` environment's
+# LUAROCKS_API_KEY. Release it before the bindings whose rockspecs need it.
+name: luarocks-backend
+
+on:
+  pull_request:
+    paths:
+      - luarocks-build-lsdocs-prebuilt/**
+      - .github/workflows/luarocks-backend.yml
+  push:
+    tags: ["luarocks-build-lsdocs-prebuilt/v*"]
+
+permissions: {}
+
+jobs:
+  check:
+    if: github.event_name == 'pull_request'
+    name: check (${{ matrix.lua }})
+    strategy:
+      fail-fast: false
+      matrix:
+        lua: [lua54, luajit]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install Lua, LuaJIT and LuaRocks
+        run: >-
+          sudo apt-get install -y --no-install-recommends
+          lua5.4 liblua5.4-dev luajit libluajit-5.1-dev luarocks
+      - name: Lint the rockspecs
+        working-directory: luarocks-build-lsdocs-prebuilt
+        run: |
+          sed 's/@VERSION@/0.0.0/g' luarocks-build-lsdocs-prebuilt.rockspec.in \
+            > luarocks-build-lsdocs-prebuilt-0.0.0-1.rockspec
+          luarocks lint luarocks-build-lsdocs-prebuilt-0.0.0-1.rockspec
+          luarocks lint luarocks-build-lsdocs-prebuilt-dev-1.rockspec
+      # The tree in rocks_trees: LuaRocks loads build backends from there.
+      - name: Install the backend
+        env:
+          LUA: ${{ matrix.lua }}
+        run: |
+          if [ "$LUA" = luajit ]; then
+            v=5.1; bin=/usr/bin/luajit; inc=/usr/include/luajit-2.1
+          else
+            v=5.4; bin=/usr/bin/lua5.4; inc=/usr/include/lua5.4
+          fi
+          cat > luarocks-config.lua <<CFG
+          lua_version = "$v"
+          variables = { LUA = "$bin", LUA_BINDIR = "/usr/bin", LUA_INCDIR = "$inc" }
+          rocks_trees = { { name = "test", root = "$PWD/.rocks" } }
+          CFG
+          export LUAROCKS_CONFIG=$PWD/luarocks-config.lua
+          luarocks --lua-version "$v" --tree .rocks install luarocks-build-rust-mlua
+          luarocks --lua-version "$v" --tree .rocks make \
+            luarocks-build-lsdocs-prebuilt/luarocks-build-lsdocs-prebuilt-dev-1.rockspec
+          # Compiles in this Lua (it runs inside LuaRocks, not loadable alone).
+          "$bin" -e "assert(loadfile('.rocks/share/lua/$v/luarocks/build/lsdocs-prebuilt.lua'))"
+
+  publish:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # Lua with LuaRocks (as build-rocks.yml's lua54-tool).
+      - uses: jdx/mise-action@924e7c586e33d7d4bae9c14e26c5d22e2beb6e78 # v5.3.0
+        with:
+          # A tag build: no cache (cache poisoning).
+          cache: false
+          mise_toml: |
+            [tools]
+            lua = "5.4.9"
+      - name: Write the rockspec
+        id: write
+        working-directory: luarocks-build-lsdocs-prebuilt
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          version=${TAG##*/v}
+          out="luarocks-build-lsdocs-prebuilt-$version-1.rockspec"
+          sed "s/@VERSION@/$version/g" luarocks-build-lsdocs-prebuilt.rockspec.in > "$out"
+          luarocks lint "$out"
+          echo "path=$out" >> "$GITHUB_OUTPUT"
+      # The account must not require 2FA for uploads (CI cannot enter a
+      # code). A version already on luarocks.org is skipped (safe to
+      # re-run).
+      - name: Upload to luarocks.org
+        working-directory: luarocks-build-lsdocs-prebuilt
+        env:
+          ROCKSPEC: ${{ steps.write.outputs.path }}
+          LUAROCKS_API_KEY: ${{ secrets.LUAROCKS_API_KEY }}
+        run: |
+          if ! out=$(luarocks upload "$ROCKSPEC" --temp-key "$LUAROCKS_API_KEY" 2>&1); then
+            echo "$out"
+            case "$out" in
+              *"already exists on the server"*) echo "$ROCKSPEC is already on luarocks.org" ;;
+              *) exit 1 ;;
+            esac
+          else
+            echo "$out"
+          fi

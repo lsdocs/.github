@@ -1,9 +1,13 @@
 # Builds a Lua module made with mlua: the library per target and Lua
 # version (`--no-default-features --features <lua>,module`), renamed to
 # what `require` loads, loaded in that Lua (installed with mise) as a smoke test where the runner
-# can run it, and packed with the rockspec. The rockspec is written from a
-# template (`@VERSION@` replaced) and checked with `luarocks lint`. Uploads
-# `rock-<target>-<lua>` and `rockspec`. Publishes nothing.
+# can run it, and packed. The rockspec is written from a template
+# (`@VERSION@` replaced, and `@SHA256@` by one `["<lua>-<target>"] =
+# "<hash>",` line per archive, for luarocks-build-lsdocs-prebuilt) and
+# checked with `luarocks lint`; then it is installed with that backend in
+# Lua 5.4 and LuaJIT (from local files, so before any release exists), and
+# once from source. Uploads `rock-<target>-<lua>` and `rockspec` (the
+# rockspec and SHA256SUMS). Publishes nothing.
 #
 # The crate needs features `lua54`, `luajit` and `module` (each enabling
 # mlua's own).
@@ -63,6 +67,12 @@ on:
         description: The mise tool that runs the luajit modules (`luajit`).
         type: string
         default: conda:luajit@2.1.1744318430
+      backend-ref:
+        description: >-
+          The lsdocs/.github ref whose luarocks-build-lsdocs-prebuilt the
+          install test uses.
+        type: string
+        default: main
 
 permissions: {}
 
@@ -149,8 +159,9 @@ jobs:
           path: "*.tar.gz"
           if-no-files-found: error
 
-  # The rockspec as LuaRocks will see it.
+  # The rockspec as LuaRocks will see it, with the archives' checksums.
   rockspec:
+    needs: module
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -163,17 +174,38 @@ jobs:
         env:
           LUA_TOOL: ${{ inputs.lua54-tool }}
         run: mise install "$LUA_TOOL"
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: rock-*
+          path: rocks
+          merge-multiple: true
       - name: Write the rockspec
         id: write
         working-directory: ${{ inputs.working-directory }}
         env:
           TEMPLATE: ${{ inputs.rockspec }}
           VERSION: ${{ inputs.version }}
+          MODULE: ${{ inputs.module }}
+          ROCKS: ${{ github.workspace }}/rocks
         run: |
           package=$(sed -n 's/^package = "\(.*\)"/\1/p' "$TEMPLATE")
           out="$package-$VERSION-1.rockspec"
-          sed "s/@VERSION@/$VERSION/g" "$TEMPLATE" > "$out"
+          (cd "$ROCKS" && sha256sum -- *.tar.gz) > SHA256SUMS
+          # <hash>  <module>-<version>-<lua>-<target>.tar.gz
+          #   -> ["<lua>-<target>"] = "<hash>",
+          prefix="$MODULE-$VERSION-"
+          while read -r hash file; do
+            key=${file#"$prefix"}
+            key=${key%.tar.gz}
+            printf '    ["%s"] = "%s",\n' "$key" "$hash"
+          done < SHA256SUMS > sha256.lua
+          awk -v version="$VERSION" '
+            /^@SHA256@$/ { while ((getline line < "sha256.lua") > 0) print line; next }
+            { gsub(/@VERSION@/, version); print }
+          ' "$TEMPLATE" > "$out"
+          rm sha256.lua
           echo "path=$out" >> "$GITHUB_OUTPUT"
+          cat "$out" SHA256SUMS
       - name: Lint the rockspec
         working-directory: ${{ inputs.working-directory }}
         env:
@@ -183,5 +215,100 @@ jobs:
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: rockspec
-          path: ${{ inputs.working-directory }}/${{ steps.write.outputs.path }}
+          path: |
+            ${{ inputs.working-directory }}/${{ steps.write.outputs.path }}
+            ${{ inputs.working-directory }}/SHA256SUMS
           if-no-files-found: error
+
+  # The rockspec installed with luarocks-build-lsdocs-prebuilt, its URL
+  # pointed at the downloaded archives (file://): the prebuilt module in
+  # Lua 5.4 and LuaJIT, and a source build (LSDOCS_PREBUILT=0). Ubuntu's
+  # Lua, LuaJIT and LuaRocks (an older LuaRocks than mise's, on purpose).
+  install:
+    name: install (${{ matrix.lua }}, ${{ matrix.from }})
+    needs: rockspec
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { lua: lua54, from: prebuilt }
+          - { lua: luajit, from: prebuilt }
+          - { lua: lua54, from: source }
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: lsdocs/.github/.github/setup-repo@main
+        with:
+          mise-install-args: cargo:nur
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: lsdocs/.github
+          ref: ${{ inputs.backend-ref }}
+          path: .lsdocs-github
+          persist-credentials: false
+      - name: Install Lua, LuaJIT and LuaRocks
+        run: >-
+          sudo apt-get install -y --no-install-recommends
+          lua5.4 liblua5.4-dev luajit libluajit-5.1-dev luarocks
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: rock-*
+          path: rocks
+          merge-multiple: true
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: rockspec
+          path: rockspec
+      - name: Configure LuaRocks
+        env:
+          LUA: ${{ matrix.lua }}
+        run: |
+          if [ "$LUA" = luajit ]; then
+            cat > luarocks-config.lua <<'CFG'
+          lua_version = "5.1"
+          variables = { LUA = "/usr/bin/luajit", LUA_BINDIR = "/usr/bin", LUA_INCDIR = "/usr/include/luajit-2.1" }
+          CFG
+            echo "LUA_VERSION=5.1" >> "$GITHUB_ENV"
+          else
+            cat > luarocks-config.lua <<'CFG'
+          lua_version = "5.4"
+          variables = { LUA = "/usr/bin/lua5.4", LUA_BINDIR = "/usr/bin", LUA_INCDIR = "/usr/include/lua5.4" }
+          CFG
+            echo "LUA_VERSION=5.4" >> "$GITHUB_ENV"
+          fi
+          echo "LUAROCKS_CONFIG=$PWD/luarocks-config.lua" >> "$GITHUB_ENV"
+      - name: Install the backend
+        run: |
+          luarocks --lua-version "$LUA_VERSION" --tree .rocks install luarocks-build-rust-mlua
+          (cd .lsdocs-github && luarocks --lua-version "$LUA_VERSION" --tree ../.rocks make \
+            luarocks-build-lsdocs-prebuilt/luarocks-build-lsdocs-prebuilt-dev-1.rockspec)
+      # `make`: the source is this checkout (the tag may not exist yet).
+      - name: Install the rockspec
+        env:
+          FROM: ${{ matrix.from }}
+          WORKDIR: ${{ inputs.working-directory }}
+        run: |
+          # Same file name: LuaRocks wants <package>-<version>-<rev>.rockspec.
+          rockspec=$(basename rockspec/*.rockspec)
+          sed "s|^  url = \"https://github.com/.*/releases/download/.*\",|  url = \"file://$PWD/rocks\",|" \
+            "rockspec/$rockspec" > "$WORKDIR/$rockspec"
+          grep -q "file://" "$WORKDIR/$rockspec"
+          if [ "$FROM" = source ]; then export LSDOCS_PREBUILT=0; fi
+          (cd "$WORKDIR" && luarocks --lua-version "$LUA_VERSION" --tree "$GITHUB_WORKSPACE/.rocks" \
+            make "$rockspec") | tee install.log
+          if [ "$FROM" = source ]; then
+            grep -q "from source" install.log
+          else
+            grep -q "Installed the prebuilt" install.log
+          fi
+      - name: Load the installed module
+        env:
+          MODULE: ${{ inputs.module }}
+          LUA: ${{ matrix.lua }}
+        run: |
+          eval "$(luarocks --lua-version "$LUA_VERSION" --tree .rocks path)"
+          bin=$([ "$LUA" = luajit ] && echo luajit || echo lua5.4)
+          "$bin" -e 'local m = require(os.getenv("MODULE"))
+          assert(type(m) == "table", "the module is not a table")
+          print(os.getenv("MODULE") .. " " .. tostring(m.version) .. " on " .. _VERSION)'

@@ -20,7 +20,8 @@ and how the first release goes. Design:
    published. In lsdocs, lsdocs-plugin-sdk and lsdocs-rst, it also runs
    `tag.yml`'s builds, every target, with their checks (`twine check`,
    publint and attw, the binaries' `--version`, each Lua module loaded in
-   its Lua and `luarocks lint` on the rockspec). A draft cannot be merged.
+   its Lua, `luarocks lint` on the rockspec and an install with
+   `luarocks-build-lsdocs-prebuilt` from the built modules). A draft cannot be merged.
 3. **Merging the release PR is the authorization.** On that merge, the
    `release` job publishes the bumped crates to crates.io and pushes their
    `<crate>/v<version>` tags. On any other push it does nothing
@@ -37,10 +38,16 @@ and how the first release goes. Design:
    - `lsdocs-plugin-node/v*`, `lsdocs-rst-node/v*`: the napi packages
      (`build-npm.yml`), published to npm, platform packages first.
    - `lsdocs-plugin-lua/v*`, `lsdocs-rst-lua/v*`: the Lua modules, per
-     target and Lua version, and the rockspec (`build-rocks.yml`),
-     attached to the release like lsdocs' binaries; then the rockspec is
-     uploaded to luarocks.org (it builds from the tag with cargo until
-     #18's backend installs the prebuilt modules).
+     target and Lua version, the rockspec and `SHA256SUMS`
+     (`build-rocks.yml`), attached to the release like lsdocs' binaries;
+     then the rockspec is uploaded to luarocks.org. It installs the
+     release's module for the user's Lua and platform with
+     `luarocks-build-lsdocs-prebuilt` (this repository; checked against
+     the rockspec's SHA-256), or builds from source.
+   - `luarocks-build-lsdocs-prebuilt/v*` (this repository): that backend,
+     uploaded to luarocks.org (`luarocks-backend.yml`). Release it before
+     the bindings' first Lua release, and before any binding that needs a
+     newer version of it.
 4. Renovate (the organization preset, `default.json` here) opens PRs in the
    repositories that depend on the released crates.
 
@@ -112,9 +119,11 @@ npm platform packages: `-darwin-arm64`, `-darwin-x64`, `-linux-arm64-gnu`,
 (napi's per-platform packages, one per target in `napi.targets` of
 `bindings/node/package.json`; `build-npm.yml` generates them).
 
-luarocks.org (`lsdocs-plugin`, `lsdocs-rst`) has no trusted publishing:
-`tag.yml` uploads with an API key, the `release` environment's
-`LUAROCKS_API_KEY` secret (kept, not deleted after the first release).
+luarocks.org (`lsdocs-plugin`, `lsdocs-rst`, and this repository's
+`luarocks-build-lsdocs-prebuilt`) has no trusted publishing: `tag.yml`
+(`luarocks-backend.yml` here) uploads with an API key, the `release`
+environment's `LUAROCKS_API_KEY` secret (kept, not deleted after the first
+release). This repository needs that environment and secret too.
 The luarocks.org account must not require 2FA for uploads.
 
 **crates.io and npm can only add a trusted publisher to a package that
