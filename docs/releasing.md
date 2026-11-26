@@ -38,9 +38,9 @@ and how the first release goes. Design:
      (`build-npm.yml`), published to npm, platform packages first.
    - `lsdocs-plugin-lua/v*`, `lsdocs-rst-lua/v*`: the Lua modules, per
      target and Lua version, and the rockspec (`build-rocks.yml`),
-     attached to the release like lsdocs' binaries. Nothing goes to
-     luarocks.org yet; `luarocks install <the rockspec's release URL>`
-     builds from the tag with cargo.
+     attached to the release like lsdocs' binaries; then the rockspec is
+     uploaded to luarocks.org (it builds from the tag with cargo until
+     #18's backend installs the prebuilt modules).
 4. Renovate (the organization preset, `default.json` here) opens PRs in the
    repositories that depend on the released crates.
 
@@ -111,6 +111,11 @@ npm platform packages: `-darwin-arm64`, `-darwin-x64`, `-linux-arm64-gnu`,
 `-win32-x64-msvc` after `@lsdocs/plugin` and `@lsdocs/rst`
 (napi's per-platform packages, one per target in `napi.targets` of
 `bindings/node/package.json`; `build-npm.yml` generates them).
+
+luarocks.org (`lsdocs-plugin`, `lsdocs-rst`) has no trusted publishing:
+`tag.yml` uploads with an API key, the `release` environment's
+`LUAROCKS_API_KEY` secret (kept, not deleted after the first release).
+The luarocks.org account must not require 2FA for uploads.
 
 **crates.io and npm can only add a trusted publisher to a package that
 exists** ("initial publish requires an API token", crates.io's docs).
