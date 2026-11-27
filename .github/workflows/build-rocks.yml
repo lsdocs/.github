@@ -1,7 +1,8 @@
 # Builds a Lua module made with mlua: the library per target and Lua
-# version (`--no-default-features --features <lua>,module`), renamed to
-# what `require` loads, loaded in that Lua (installed with mise) as a smoke test where the runner
-# can run it, and packed. The rockspec is written from a template
+# version (`--no-default-features --features <lua>,module`; Linux targets
+# with cross, for older-glibc compatibility, as build-bin.yml), renamed to
+# what `require` loads, loaded in that Lua as a smoke test on a runner of
+# its target, and packed. The rockspec is written from a template
 # (`@VERSION@` replaced, and `@SHA256@` by one `["<lua>-<target>"] =
 # "<hash>",` line per archive, for luarocks-build-lsdocs-prebuilt) and
 # checked with `luarocks lint`; then it is installed with that backend in
@@ -97,12 +98,13 @@ jobs:
       matrix:
         target: ${{ fromJSON(inputs.targets) }}
         lua: ${{ fromJSON(inputs.lua-versions) }}
-    # Native runners only: every module is loaded by a Lua of its target,
-    # except x86_64 macOS, built on an ARM runner (no smoke test).
+    # Linux: cross-built on x86_64 (cross-rs, for older-glibc
+    # compatibility); the aarch64 modules are loaded by `load-linux-arm`.
+    # Every other module is loaded by a Lua of its target here, except x86_64
+    # macOS, built on an ARM runner (no smoke test).
     runs-on: >-
       ${{ contains(matrix.target, 'windows') && 'windows-latest'
       || contains(matrix.target, 'apple') && 'macos-latest'
-      || startsWith(matrix.target, 'aarch64') && 'ubuntu-24.04-arm'
       || 'ubuntu-latest' }}
     permissions:
       contents: read
@@ -116,17 +118,35 @@ jobs:
       # The interpreter for the smoke test, from mise (Lua is built from
       # source; LuaJIT comes from conda-forge).
       - name: Install Lua
-        if: matrix.target != 'x86_64-apple-darwin' && !contains(matrix.target, 'windows')
+        if: >-
+          matrix.target != 'x86_64-apple-darwin'
+          && !contains(matrix.target, 'windows')
+          && !startsWith(matrix.target, 'aarch64-unknown-linux')
         env:
           LUA_TOOL: ${{ matrix.lua == 'luajit' && inputs.luajit-tool || inputs.lua54-tool }}
           # The conda backend is experimental in mise.
           MISE_EXPERIMENTAL: "1"
         run: mise install "$LUA_TOOL"
+      # Linux: cross (cross-rs), in an image with an older glibc than the
+      # runner's, so the modules load on older distributions too (as
+      # build-bin.yml's binaries). Module mode links no Lua library.
+      - name: Build the module (cross)
+        if: contains(matrix.target, 'linux')
+        env:
+          TARGET: ${{ matrix.target }}
+          LUA: ${{ matrix.lua }}
+          CRATE: ${{ inputs.crate }}
+        run: >-
+          mise exec cargo:cross@latest --
+          cross build --release --locked -p "$CRATE" --target "$TARGET"
+          --no-default-features --features "$LUA,module"
       - name: Add the target
+        if: ${{ !contains(matrix.target, 'linux') }}
         env:
           TARGET: ${{ matrix.target }}
         run: rustup target add "$TARGET"
       - name: Build the module
+        if: ${{ !contains(matrix.target, 'linux') }}
         env:
           TARGET: ${{ matrix.target }}
           LUA: ${{ matrix.lua }}
@@ -165,7 +185,9 @@ jobs:
           # A tag build: no cache (cache poisoning).
           use-cache: "false"
       - name: Load the module
-        if: matrix.target != 'x86_64-apple-darwin'
+        if: >-
+          matrix.target != 'x86_64-apple-darwin'
+          && !startsWith(matrix.target, 'aarch64-unknown-linux')
         env:
           MODULE: ${{ inputs.module }}
           TARGET: ${{ matrix.target }}
@@ -194,9 +216,51 @@ jobs:
           path: "*.tar.gz"
           if-no-files-found: error
 
+  # The cross-built aarch64 Linux modules, loaded on an ARM runner.
+  load-linux-arm:
+    name: load (aarch64-unknown-linux-gnu, ${{ matrix.lua }})
+    if: contains(inputs.targets, 'aarch64-unknown-linux-gnu')
+    needs: module
+    strategy:
+      fail-fast: false
+      matrix:
+        lua: ${{ fromJSON(inputs.lua-versions) }}
+    runs-on: ubuntu-24.04-arm
+    permissions: {}
+    steps:
+      - uses: jdx/mise-action@924e7c586e33d7d4bae9c14e26c5d22e2beb6e78 # v5.3.0
+        with:
+          # Tag builds call this workflow: no cache (cache poisoning).
+          cache: false
+          install: false
+      - name: Install Lua
+        env:
+          LUA_TOOL: ${{ matrix.lua == 'luajit' && inputs.luajit-tool || inputs.lua54-tool }}
+          MISE_EXPERIMENTAL: "1"
+        run: mise install "$LUA_TOOL"
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: rock-aarch64-unknown-linux-gnu-${{ matrix.lua }}
+          path: rocks
+      - name: Load the module
+        env:
+          MODULE: ${{ inputs.module }}
+          LUA_TOOL: ${{ matrix.lua == 'luajit' && inputs.luajit-tool || inputs.lua54-tool }}
+          LUA_BIN: ${{ matrix.lua == 'luajit' && 'luajit' || 'lua' }}
+          MISE_EXPERIMENTAL: "1"
+        run: |
+          mkdir dist
+          tar -xzf rocks/*.tar.gz -C dist
+          mise exec "$LUA_TOOL" -- "$LUA_BIN" -e 'package.cpath = "dist/lib/?.so;" .. package.cpath
+          local m = require(os.getenv("MODULE"))
+          assert(type(m) == "table", "the module is not a table")
+          print(os.getenv("MODULE") .. " " .. tostring(m.version) .. " on " .. _VERSION)'
+
   # The rockspec as LuaRocks will see it, with the archives' checksums.
   rockspec:
-    needs: module
+    needs: [module, load-linux-arm]
+    # load-linux-arm is skipped when aarch64 Linux is not a target.
+    if: ${{ !failure() && !cancelled() }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
