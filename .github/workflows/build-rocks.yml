@@ -376,6 +376,8 @@ jobs:
           CFG
             echo "LUA_VERSION=5.4" >> "$GITHUB_ENV"
           fi
+          # LuaRocks loads build backends only from its rocks_trees.
+          echo "rocks_trees = { { name = \"test\", root = \"$PWD/.rocks\" } }" >> luarocks-config.lua
           echo "LUAROCKS_CONFIG=$PWD/luarocks-config.lua" >> "$GITHUB_ENV"
       - name: Install the backend
         run: |
