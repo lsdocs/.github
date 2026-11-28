@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 512 512">
+  <defs>
+    <style>
+      .cls-1{fill:none;stroke:#c0392b;stroke-width:18}
+      .cls-2{fill:none;stroke:#c0392b;stroke-width:5}
+      .cls-3{font-family:&apos;Arial Black&apos;, sans-serif;font-size:40px;font-weight:900;fill:#c0392b;letter-spacing:6px}
+      .cls-4{font-family:&apos;Arial Black&apos;, sans-serif;font-size:34px;font-weight:900;fill:#c0392b;letter-spacing:5px}
+      .cls-5{fill:#c0392b}
+      .cls-6{fill:none;stroke:#cc3333;stroke-width:30;stroke-linecap:round;stroke-linejoin:round}
+    </style>
+    <path id="text-path-1" d="M119.059 285.108 C102.984 209.477 151.262 135.135 226.892 119.059 C302.523 102.984 376.865 151.262 392.941 226.892"/>
+    <path id="text-path-2" d="M105.365 288.018 C123.049 371.212 204.825 424.318 288.018 406.635 C371.212 388.951 424.318 307.175 406.635 223.982"/>
+  </defs>
+  <title>publisher-avatar.svg</title>
+  <g id="Layer_1" data-name="Layer 1">
+    <g>
+      <path d="M451.63 214.418 C474.595 322.461 405.626 428.664 297.582 451.63 C189.539 474.595 83.336 405.626 60.37 297.582 C37.405 189.539 106.374 83.336 214.418 60.37 C322.461 37.405 428.664 106.374 451.63 214.418 Z" class="cls-1"/>
+      <path d="M424.241 220.239 C443.992 313.156 384.678 404.491 291.761 424.241 C198.844 443.992 107.509 384.678 87.759 291.761 C68.008 198.844 127.322 107.509 220.239 87.759 C313.156 68.008 404.491 127.322 424.241 220.239 Z" class="cls-2"/>
+      <path d="M361.64 233.546 C374.041 291.889 336.798 349.239 278.454 361.64 C220.111 374.041 162.761 336.798 150.36 278.454 C137.959 220.111 175.202 162.761 233.546 150.36 C291.889 137.959 349.239 175.202 361.64 233.546 Z" class="cls-2"/>
+      <text xml:space="preserve" class="cls-3"><textPath xlink:href="#text-path-1" startOffset="25.448%"><tspan>LSDOCS</tspan></textPath></text>
+      <text xml:space="preserve" class="cls-4"><textPath xlink:href="#text-path-2" startOffset="22.709%"><tspan>PUBLISHER</tspan></textPath></text>
+      <path d="M108.3 287.395 C109.333 292.257 106.23 297.036 101.368 298.069 C96.506 299.103 91.726 295.999 90.693 291.137 C89.66 286.275 92.763 281.496 97.625 280.463 C102.487 279.429 107.266 282.533 108.3 287.395 Z" class="cls-5"/>
+      <path d="M421.307 220.863 C422.34 225.725 419.237 230.504 414.375 231.537 C409.513 232.571 404.734 229.467 403.7 224.605 C402.667 219.743 405.77 214.964 410.632 213.931 C415.494 212.897 420.274 216.001 421.307 220.863 Z" class="cls-5"/>
+      <polyline points="202.471,273.512 249.914,304.321 307.913,202.027" class="cls-6"/>
+    </g>
+  </g>
+</svg>
